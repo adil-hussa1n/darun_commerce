@@ -3,7 +3,7 @@ import React from 'react';
 // Single Statistics Card Skeleton
 export function StatSkeleton() {
   return (
-    <div className="p-6 rounded-2xl bg-white border border-beauty-rose/20 shadow-xs flex items-center justify-between">
+    <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between">
       <div className="space-y-2.5 w-full">
         <div className="h-3 w-20 skeleton-shimmer rounded-md" />
         <div className="h-8 w-28 skeleton-shimmer rounded-md" />
@@ -16,7 +16,7 @@ export function StatSkeleton() {
 // Single Product Grid Card Skeleton
 export function ProductCardSkeleton() {
   return (
-    <div className="bg-white rounded-2xl border border-beauty-rose/20 shadow-xs overflow-hidden flex flex-col h-[400px]">
+    <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md overflow-hidden flex flex-col h-[400px]">
       <div className="h-48 w-full skeleton-shimmer" />
       <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
         <div className="space-y-2">
@@ -38,7 +38,7 @@ export function ProductCardSkeleton() {
 // Single Table Row Skeleton
 export function TableRowSkeleton() {
   return (
-    <tr className="border-b border-beauty-rose/10">
+    <tr className="border-b border-white/5">
       <td className="px-6 py-4"><div className="h-4 w-24 skeleton-shimmer rounded-md" /></td>
       <td className="px-6 py-4"><div className="h-4 w-40 skeleton-shimmer rounded-md" /></td>
       <td className="px-6 py-4"><div className="h-4.5 w-16 skeleton-shimmer rounded-full" /></td>
@@ -59,32 +59,13 @@ export function DashboardSkeleton() {
         <StatSkeleton />
         <StatSkeleton />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-beauty-rose/20 shadow-xs space-y-4">
+      <div className="grid grid-cols-1 gap-8">
+        <div className="bg-beauty-rose p-6 rounded-2xl border border-white/5 shadow-md space-y-4">
           <div className="h-5 w-32 skeleton-shimmer rounded-md" />
           <div className="space-y-3">
             <div className="h-8 skeleton-shimmer rounded-md" />
             <div className="h-8 skeleton-shimmer rounded-md" />
             <div className="h-8 skeleton-shimmer rounded-md" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-beauty-rose/20 shadow-xs space-y-4">
-          <div className="h-5 w-32 skeleton-shimmer rounded-md" />
-          <div className="space-y-4">
-            <div className="flex gap-3">
-              <div className="w-12 h-12 rounded-lg skeleton-shimmer" />
-              <div className="space-y-2 w-full">
-                <div className="h-4 w-2/3 skeleton-shimmer rounded-md" />
-                <div className="h-3 w-1/3 skeleton-shimmer rounded-md" />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-12 h-12 rounded-lg skeleton-shimmer" />
-              <div className="space-y-2 w-full">
-                <div className="h-4 w-2/3 skeleton-shimmer rounded-md" />
-                <div className="h-3 w-1/3 skeleton-shimmer rounded-md" />
-              </div>
-            </div>
           </div>
         </div>
       </div>

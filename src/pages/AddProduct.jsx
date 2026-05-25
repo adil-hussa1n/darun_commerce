@@ -10,14 +10,14 @@ import {
 } from 'lucide-react';
 import { addProduct } from '../services/api';
 
-const DEFAULT_IMAGE_PREVIEW = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=400';
+const DEFAULT_IMAGE_PREVIEW = '/logo.png';
 
 export default function AddProduct() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    category: 'Skin Care',
+    category: '',
     buy_price: '',
     sell_price: '',
     stock: '',
@@ -96,13 +96,13 @@ export default function AddProduct() {
       <div className="space-y-2">
         <button 
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-xs font-semibold text-beauty-taupe hover:text-beauty-dark transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold text-beauty-taupe hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Overview
         </button>
         <div className="flex items-center gap-2">
-          <h2 className="text-3xl font-bold font-serif tracking-tight text-beauty-dark">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">
             Register New Product
           </h2>
         </div>
@@ -116,7 +116,7 @@ export default function AddProduct() {
         {/* Registration Form (3/5 width) */}
         <form 
           onSubmit={handleSubmit}
-          className="lg:col-span-3 bg-white p-6 md:p-8 rounded-2xl border border-beauty-rose/20 shadow-xs space-y-6"
+          className="lg:col-span-3 bg-beauty-rose p-6 md:p-8 rounded-2xl border border-white/5 shadow-md space-y-6"
         >
           {/* Field: Product Name */}
           <div>
@@ -221,7 +221,7 @@ export default function AddProduct() {
               placeholder="https://images.unsplash.com/..."
               className="beauty-input"
             />
-            <p className="text-[10px] text-beauty-taupe/80 mt-1">
+            <p className="text-[10px] text-beauty-taupe mt-1">
               Provide a direct link to an image. (Tip: Use Unsplash for studio product shots).
             </p>
           </div>
@@ -244,7 +244,7 @@ export default function AddProduct() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-beauty-taupe hover:bg-beauty-dark text-white rounded-xl font-medium tracking-wide transition-all shadow-xs hover:shadow-md disabled:bg-beauty-taupe/50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl font-semibold tracking-wide transition-all shadow-md disabled:bg-beauty-accent/50 disabled:cursor-not-allowed cursor-pointer"
           >
             {submitting ? (
               <>
@@ -266,27 +266,26 @@ export default function AddProduct() {
             Live Preview
           </h3>
           
-          <div className="bg-white rounded-2xl border border-beauty-rose/20 shadow-sm overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-md">
+          <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-lg hover:border-white/10">
             {/* Image Preview Window */}
-            <div className="h-56 bg-beauty-cream relative overflow-hidden flex items-center justify-center border-b border-beauty-rose/10">
+            <div className="h-64 bg-beauty-cream/30 relative overflow-hidden flex items-center justify-center border-b border-white/5 p-4">
               <img 
                 src={form.image || DEFAULT_IMAGE_PREVIEW} 
                 alt="Product Preview" 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
+                className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105 drop-shadow-lg"
                 onError={(e) => {
                   // Fallback if URL is invalid
                   e.target.onerror = null;
                   e.target.src = DEFAULT_IMAGE_PREVIEW;
                 }}
               />
-              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] font-bold text-beauty-dark shadow-xs border border-white/50">
-                {form.category}
+              <div className="absolute top-3 right-3 bg-[#151030] text-[#915EFF] border border-[#915EFF]/20 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs">
+                {form.category || 'No Category'}
               </div>
               
               {!form.image && (
-                <div className="absolute inset-0 bg-black/5 flex flex-col items-center justify-center text-beauty-taupe/40 gap-1.5 pointer-events-none">
-                  <ImageIcon className="w-6 h-6" />
-                  <span className="text-[10px] font-medium">Using Default Image</span>
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-1.5 pointer-events-none">
+                  <span className="text-[10px] font-medium text-beauty-taupe/60 bg-beauty-cream/60 px-2 py-0.5 rounded-full">Default Logo</span>
                 </div>
               )}
             </div>
@@ -294,7 +293,7 @@ export default function AddProduct() {
             {/* Product Meta */}
             <div className="p-5 space-y-4">
               <div>
-                <h4 className="font-serif font-bold text-lg text-beauty-dark leading-tight truncate">
+                <h4 className="font-sans font-bold text-lg text-white leading-tight truncate">
                   {form.name || 'Untitled Product'}
                 </h4>
                 <p className="text-xs text-beauty-taupe mt-1 h-8 line-clamp-2 overflow-hidden italic leading-relaxed">
@@ -303,22 +302,22 @@ export default function AddProduct() {
               </div>
 
               {/* Specs Grid */}
-              <div className="grid grid-cols-3 gap-2 border-t border-b border-beauty-rose/15 py-3 text-center">
+              <div className="grid grid-cols-3 gap-2 border-t border-b border-white/5 py-3 text-center">
                 <div>
-                  <span className="block text-[9px] font-bold text-beauty-taupe/70 uppercase">Cost</span>
-                  <span className="text-xs font-semibold text-beauty-dark/70">
+                  <span className="block text-[9px] font-bold text-beauty-taupe uppercase">Cost</span>
+                  <span className="text-xs font-semibold text-white/70">
                     {formatCurrency(form.buy_price)}
                   </span>
                 </div>
                 <div>
                   <span className="block text-[9px] font-bold text-beauty-accent uppercase">Retail</span>
-                  <span className="text-xs font-bold text-beauty-dark">
+                  <span className="text-xs font-bold text-white">
                     {formatCurrency(form.sell_price)}
                   </span>
                 </div>
                 <div>
-                  <span className="block text-[9px] font-bold text-beauty-taupe/70 uppercase">Stock</span>
-                  <span className={`text-xs font-bold ${parseInt(form.stock, 10) < 5 ? 'text-rose-500' : 'text-beauty-dark/80'}`}>
+                  <span className="block text-[9px] font-bold text-beauty-taupe uppercase">Stock</span>
+                  <span className={`text-xs font-bold ${parseInt(form.stock, 10) < 5 ? 'text-rose-500' : 'text-white/80'}`}>
                     {form.stock || '0'}
                   </span>
                 </div>
@@ -331,7 +330,7 @@ export default function AddProduct() {
                   <span className="font-semibold text-beauty-taupe">Created today</span>
                 </div>
                 {parseInt(form.stock, 10) < 5 && (
-                  <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 font-bold border border-rose-100">
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 font-bold border border-rose-500/20">
                     Low Stock Alert
                   </span>
                 )}

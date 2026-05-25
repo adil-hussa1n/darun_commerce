@@ -1,87 +1,24 @@
-import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
 
-// Retreive the API URLs from environment variables.
-const API_URL = import.meta.env.VITE_SHEETDB_API_URL || '';
-const PRODUCTS_URL_ENV = import.meta.env.VITE_SHEETDB_PRODUCTS_URL || '';
-const SALES_URL_ENV = import.meta.env.VITE_SHEETDB_SALES_URL || '';
+// Retrieve Supabase credentials from environment variables (supporting both Vite and Node.js environments)
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '')) || '';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_ANON_KEY : (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : '')) || '';
 
-// Clean up trailing slash if any
-const BASE_URL = API_URL.replace(/\/$/, '');
-const PRODUCTS_URL = PRODUCTS_URL_ENV.replace(/\/$/, '') || (BASE_URL ? `${BASE_URL}?sheet=products` : '');
-const SALES_URL = SALES_URL_ENV.replace(/\/$/, '') || (BASE_URL ? `${BASE_URL}?sheet=sales` : '');
+// Check if Supabase project is configured in .env
+export const isSupabaseConfigured = () => {
+  return (typeof supabaseUrl === 'string' && supabaseUrl.trim() !== '') &&
+         (typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() !== '');
+};
 
-// Utility helper to check if SheetDB integration is active
+// Maintain compatibility with Layout.jsx which uses isApiConfigured
 export const isApiConfigured = () => {
-  return (typeof PRODUCTS_URL === 'string' && PRODUCTS_URL.trim() !== '') &&
-         (typeof SALES_URL === 'string' && SALES_URL.trim() !== '');
+  return isSupabaseConfigured();
 };
 
-/**
- * ----------------------------------------------------
- * DYNAMIC HEADER DETECTION HELPER FUNCTIONS
- * ----------------------------------------------------
- * These functions parse existing rows from SheetDB to find if the user
- * made spacing or spelling typos in Row 1 of their Google Spreadsheet,
- * mapping them dynamically so the code doesn't crash.
- */
-
-const detectProductHeaders = (sampleProduct) => {
-  const headers = {
-    id: 'id',
-    name: 'name',
-    category: 'category',
-    buy_price: 'buy_price',
-    sell_price: 'sell_price',
-    stock: 'stock',
-    image: 'image',
-    notes: 'notes',
-    created_at: 'created_at'
-  };
-  
-  if (!sampleProduct) return headers;
-  
-  Object.keys(sampleProduct).forEach(key => {
-    const trimmed = key.trim();
-    if (trimmed === 'id') headers.id = key;
-    else if (trimmed === 'name') headers.name = key;
-    else if (trimmed === 'category') headers.category = key;
-    else if (trimmed === 'buy_price') headers.buy_price = key;
-    else if (trimmed === 'sell_price') headers.sell_price = key;
-    else if (trimmed === 'stock') headers.stock = key;
-    else if (trimmed === 'image') headers.image = key;
-    else if (trimmed === 'notes') headers.notes = key;
-    else if (trimmed === 'created_at' || trimmed === 'createed_at') headers.created_at = key;
-  });
-  
-  return headers;
-};
-
-const detectSalesHeaders = (sampleSale) => {
-  const headers = {
-    sale_id: 'sale_id',
-    product_name: 'product_name',
-    category: 'category',
-    quantity: 'quantity',
-    unit_price: 'unit_price',
-    total_price: 'total_price',
-    date: 'date'
-  };
-
-  if (!sampleSale) return headers;
-
-  Object.keys(sampleSale).forEach(key => {
-    const trimmed = key.trim();
-    if (trimmed === 'sale_id') headers.sale_id = key;
-    else if (trimmed === 'product_name') headers.product_name = key;
-    else if (trimmed === 'category') headers.category = key;
-    else if (trimmed === 'quantity' || trimmed === 'quality') headers.quantity = key;
-    else if (trimmed === 'unit_price') headers.unit_price = key;
-    else if (trimmed === 'total_price') headers.total_price = key;
-    else if (trimmed === 'date') headers.date = key;
-  });
-
-  return headers;
-};
+// Initialize Supabase Client
+export const supabase = isSupabaseConfigured()
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 // Initial Dummy Data for local state fallback
 const DUMMY_PRODUCTS = [
@@ -188,6 +125,127 @@ const saveLocalData = (key, data) => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
+// Helper to retrieve local product listings as a fallback
+const getLocalProductsFallback = () => {
+  const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+  return products.map((p, idx) => {
+    const rawId = (p.id || '').toString().trim();
+    let finalId = rawId;
+    if (!finalId) {
+      const pName = (p.name || '').toString().trim();
+      if (pName) {
+        let hash = 0;
+        for (let i = 0; i < pName.length; i++) {
+          hash = (hash << 5) - hash + pName.charCodeAt(i);
+          hash |= 0;
+        }
+        finalId = `prod_sh_${Math.abs(hash)}`;
+      } else {
+        finalId = `prod_gen_${idx}_${Date.now()}`;
+      }
+    }
+    return {
+      ...p,
+      id: finalId,
+      buy_price: parseFloat(p.buy_price || 0),
+      sell_price: parseFloat(p.sell_price || 0),
+      stock: parseInt(p.stock || 0, 10),
+    };
+  });
+};
+
+// Helper to retrieve local sales listings as a fallback
+const getLocalSalesFallback = () => {
+  const sales = getLocalData('uk_sales', DUMMY_SALES);
+  return sales.map(s => ({
+    ...s,
+    quantity: parseInt(s.quantity || 0, 10),
+    unit_price: parseFloat(s.unit_price || 0),
+    total_price: parseFloat(s.total_price || 0)
+  }));
+};
+
+// Helper to perform product addition locally
+const executeLocalAddProductDirect = (formattedProduct) => {
+  const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+  products.unshift(formattedProduct);
+  saveLocalData('uk_products', products);
+  return { created: 1, local: true };
+};
+
+// Helper to perform checkout / stock reduction locally
+const executeLocalCheckout = (cartItems, customerPhone) => {
+  const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+  
+  // Verify stock
+  for (const item of cartItems) {
+    const product = products.find(p => {
+      const pId = (p.id || '').toString().trim();
+      if (pId && pId === item.id) return true;
+      if (!pId && item.id.startsWith('prod_sh_')) {
+        const pName = (p.name || '').toString().trim();
+        let hash = 0;
+        for (let i = 0; i < pName.length; i++) {
+          hash = (hash << 5) - hash + pName.charCodeAt(i);
+          hash |= 0;
+        }
+        const generatedId = `prod_sh_${Math.abs(hash)}`;
+        if (generatedId === item.id) return true;
+      }
+      return false;
+    });
+    
+    if (!product) throw new Error(`Product "${item.name}" not found`);
+    const currentStock = parseInt(product.stock || 0, 10);
+    if (currentStock < item.quantity) {
+      throw new Error(`Insufficient stock for "${product.name}". Only ${currentStock} left.`);
+    }
+  }
+
+  // Cut stock
+  for (const item of cartItems) {
+    const product = products.find(p => {
+      const pId = (p.id || '').toString().trim();
+      if (pId && pId === item.id) return true;
+      if (!pId && item.id.startsWith('prod_sh_')) {
+        const pName = (p.name || '').toString().trim();
+        let hash = 0;
+        for (let i = 0; i < pName.length; i++) {
+          hash = (hash << 5) - hash + pName.charCodeAt(i);
+          hash |= 0;
+        }
+        const generatedId = `prod_sh_${Math.abs(hash)}`;
+        if (generatedId === item.id) return true;
+      }
+      return false;
+    });
+    product.stock = (parseInt(product.stock || 0, 10) - item.quantity).toString();
+  }
+  saveLocalData('uk_products', products);
+
+  // Save logs
+  const sales = getLocalData('uk_sales', DUMMY_SALES);
+  const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const batchTimestamp = Date.now();
+
+  cartItems.forEach((item, index) => {
+    const newSale = {
+      sale_id: `sale_${batchTimestamp}_${index}`,
+      product_name: item.name,
+      category: item.category || '',
+      quantity: item.quantity.toString(),
+      unit_price: parseFloat(item.sell_price).toFixed(2),
+      total_price: (parseFloat(item.sell_price) * item.quantity).toFixed(2),
+      customer_phone: customerPhone || '',
+      date: dateStr
+    };
+    sales.unshift(newSale);
+  });
+  saveLocalData('uk_sales', sales);
+
+  return { success: true, local: true };
+};
+
 /**
  * ----------------------------------------------------
  * PRODUCTS OPERATIONS
@@ -196,114 +254,89 @@ const saveLocalData = (key, data) => {
 
 // Fetch all products
 export const getProducts = async () => {
-  if (isApiConfigured()) {
+  if (isSupabaseConfigured()) {
     try {
-      const response = await axios.get(PRODUCTS_URL);
-      if (!response.data || response.data.length === 0) return [];
-      
-      // Auto detect any user sheet header spaces or typos
-      const headers = detectProductHeaders(response.data[0]);
+      const { data, error } = await supabase
+        .from('uk_products')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      return response.data.map(p => ({
-        id: (p[headers.id] || '').toString(),
-        name: (p[headers.name] || '').toString(),
-        category: (p[headers.category] || '').toString(),
-        buy_price: parseFloat(p[headers.buy_price] || 0),
-        sell_price: parseFloat(p[headers.sell_price] || 0),
-        stock: parseInt(p[headers.stock] || 0, 10),
-        image: (p[headers.image] || '').toString(),
-        notes: (p[headers.notes] || '').toString(),
-        created_at: (p[headers.created_at] || '').toString(),
-      }));
+      if (error) throw error;
+      
+      return (data || []).map((p, idx) => {
+        const rawId = (p.id || '').toString().trim();
+        const pName = (p.name || '').toString().trim();
+        
+        let finalId = rawId;
+        if (!finalId) {
+          if (pName) {
+            let hash = 0;
+            for (let i = 0; i < pName.length; i++) {
+              hash = (hash << 5) - hash + pName.charCodeAt(i);
+              hash |= 0;
+            }
+            finalId = `prod_sh_${Math.abs(hash)}`;
+          } else {
+            finalId = `prod_gen_${idx}_${Date.now()}`;
+          }
+        }
+
+        return {
+          id: finalId,
+          name: pName || 'Untitled Product',
+          category: p.category || '',
+          buy_price: parseFloat(p.buy_price || 0),
+          sell_price: parseFloat(p.sell_price || 0),
+          stock: parseInt(p.stock || 0, 10),
+          image: p.image || '',
+          notes: p.notes || '',
+          created_at: p.created_at || '',
+        };
+      });
     } catch (error) {
-      console.error('Error fetching products from SheetDB, failing over to mock:', error);
-      throw error;
+      console.warn('Error fetching products from Supabase, falling back to local storage:', error.message);
+      return getLocalProductsFallback();
     }
   } else {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const products = getLocalData('uk_products', DUMMY_PRODUCTS);
-    return products.map(p => ({
-      ...p,
-      buy_price: parseFloat(p.buy_price || 0),
-      sell_price: parseFloat(p.sell_price || 0),
-      stock: parseInt(p.stock || 0, 10),
-    }));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalProductsFallback();
   }
 };
 
 // Add a single product
 export const addProduct = async (productData) => {
-  let headers = {
-    id: 'id',
-    name: 'name',
-    category: 'category',
-    buy_price: 'buy_price',
-    sell_price: 'sell_price',
-    stock: 'stock',
-    image: 'image',
-    notes: 'notes',
-    created_at: 'created_at'
-  };
-
-  // If connected, fetch headers to make sure we map correctly
-  if (isApiConfigured()) {
-    try {
-      const getRes = await axios.get(PRODUCTS_URL);
-      if (getRes.data && getRes.data.length > 0) {
-        headers = detectProductHeaders(getRes.data[0]);
-      }
-    } catch (err) {
-      console.warn('Skipped header auto-detection on add:', err.message);
-    }
-  }
-
-  // Fallback demo product icon URL if user leaves it empty
-  const defaultImage = 'https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&q=80&w=400';
+  const defaultImage = '/logo.png';
   const imgUrl = (productData.image && productData.image.trim() !== '') 
     ? productData.image.trim() 
     : defaultImage;
 
-  const formattedProduct = {};
-  formattedProduct[headers.id] = `prod_${Date.now()}`;
-  formattedProduct[headers.name] = productData.name;
-  formattedProduct[headers.category] = productData.category;
-  formattedProduct[headers.buy_price] = parseFloat(productData.buy_price || 0).toFixed(2);
-  formattedProduct[headers.sell_price] = parseFloat(productData.sell_price || 0).toFixed(2);
-  formattedProduct[headers.stock] = parseInt(productData.stock || 0, 10).toString();
-  formattedProduct[headers.image] = imgUrl;
-  formattedProduct[headers.notes] = productData.notes || '';
-  formattedProduct[headers.created_at] = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const formattedProduct = {
+    id: `prod_${Date.now()}`,
+    name: productData.name,
+    category: productData.category || '',
+    buy_price: Math.round(parseFloat(productData.buy_price || 0)),
+    sell_price: Math.round(parseFloat(productData.sell_price || 0)),
+    stock: parseInt(productData.stock || 0, 10),
+    image: imgUrl,
+    notes: productData.notes || '',
+    created_at: new Date().toISOString()
+  };
 
-  if (isApiConfigured()) {
+  if (isSupabaseConfigured()) {
     try {
-      const response = await axios.post(PRODUCTS_URL, {
-        data: [formattedProduct]
-      });
-      return response.data;
+      const { error } = await supabase
+        .from('uk_products')
+        .insert([formattedProduct]);
+
+      if (error) throw error;
+      return { created: 1 };
     } catch (error) {
-      console.error('Error adding product to SheetDB:', error);
-      throw error;
+      console.warn('Error adding product to Supabase, falling back locally:', error.message);
+      return executeLocalAddProductDirect(formattedProduct);
     }
   } else {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const products = getLocalData('uk_products', DUMMY_PRODUCTS);
-    
-    // Format locally for standard structure
-    const localProduct = {
-      id: formattedProduct[headers.id],
-      name: formattedProduct[headers.name],
-      category: formattedProduct[headers.category],
-      buy_price: formattedProduct[headers.buy_price],
-      sell_price: formattedProduct[headers.sell_price],
-      stock: formattedProduct[headers.stock],
-      image: formattedProduct[headers.image],
-      notes: formattedProduct[headers.notes],
-      created_at: formattedProduct[headers.created_at]
-    };
-
-    products.unshift(localProduct);
-    saveLocalData('uk_products', products);
-    return { created: 1 };
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalAddProductDirect(formattedProduct);
   }
 };
 
@@ -319,176 +352,188 @@ export const sellProduct = async (productId, quantityToSell) => {
 };
 
 // Sell multiple products at a time (Cart Checkout)
-export const sellMultipleProducts = async (cartItems) => {
+export const sellMultipleProducts = async (cartItems, customerPhone) => {
   if (cartItems.length === 0) {
     throw new Error('No items in checkout list');
   }
 
-  if (isApiConfigured()) {
+  if (isSupabaseConfigured()) {
     try {
-      // 1. Fetch current raw products to check stock and find column headers
-      const responseGet = await axios.get(PRODUCTS_URL);
-      const rawProducts = responseGet.data;
-      if (!rawProducts || rawProducts.length === 0) {
-        throw new Error('No products found in the sheet database.');
-      }
+      const batchTimestamp = Date.now();
       
-      const prodHeaders = detectProductHeaders(rawProducts[0]);
-      
+      // 1. Fetch current raw products to check stock
+      const { data: dbProducts, error: fetchErr } = await supabase
+        .from('uk_products')
+        .select('*');
+
+      if (fetchErr) throw fetchErr;
+
       // Perform validation and prepare updates
       const stockUpdates = [];
       for (const item of cartItems) {
-        const product = rawProducts.find(p => (p[prodHeaders.id] || '').toString() === item.id.toString());
+        // Find product in DB. Support matching by either direct ID or by name-hash
+        const product = dbProducts.find(p => {
+          const dbId = (p.id || '').toString().trim();
+          const dbName = (p.name || '').toString().trim();
+          
+          if (dbId && dbId === item.id) return true;
+          
+          if (!dbId && item.id.startsWith('prod_sh_')) {
+            let hash = 0;
+            for (let i = 0; i < dbName.length; i++) {
+              hash = (hash << 5) - hash + dbName.charCodeAt(i);
+              hash |= 0;
+            }
+            const generatedId = `prod_sh_${Math.abs(hash)}`;
+            if (generatedId === item.id) return true;
+          }
+          return false;
+        });
+
         if (!product) {
-          throw new Error(`Product with ID ${item.id} not found.`);
+          throw new Error(`Product "${item.name}" not found in database.`);
         }
 
-        const currentStock = parseInt(product[prodHeaders.stock] || 0, 10);
+        const currentStock = parseInt(product.stock || 0, 10);
         if (currentStock < item.quantity) {
-          throw new Error(`Insufficient stock for "${product[prodHeaders.name]}". Only ${currentStock} left.`);
+          throw new Error(`Insufficient stock for "${product.name}". Only ${currentStock} left.`);
         }
 
+        const dbId = (product.id || '').toString().trim();
         stockUpdates.push({
           productId: item.id,
+          isGeneratedId: !dbId,
+          originalName: product.name,
           newStock: currentStock - item.quantity,
-          name: product[prodHeaders.name],
-          category: product[prodHeaders.category] || '',
-          unitPrice: parseFloat(product[prodHeaders.sell_price] || 0)
+          name: product.name,
+          category: product.category || '',
+          unitPrice: parseFloat(product.sell_price || 0),
+          qtySold: item.quantity
         });
       }
 
-      // 2. Perform Stock Reduction PATCH calls in parallel
+      // 2. Insert transaction records into Supabase customer_sales
+      const customerSalesRows = stockUpdates.map((update, index) => {
+        let numericProductId = null;
+        if (update.productId) {
+          const digits = update.productId.replace(/\D/g, '');
+          if (digits) {
+            const num = parseInt(digits, 10);
+            if (num <= 9007199254740991) {
+              numericProductId = num;
+            } else {
+              numericProductId = parseInt(digits.slice(-15), 10);
+            }
+          } else {
+            // Fallback hashing if no digits are present
+            let hash = 0;
+            for (let i = 0; i < update.productId.length; i++) {
+              hash = (hash << 5) - hash + update.productId.charCodeAt(i);
+              hash |= 0;
+            }
+            numericProductId = Math.abs(hash);
+          }
+        }
+
+        return {
+          product_id: numericProductId,
+          customer_phone: customerPhone,
+          quantity: update.qtySold,
+          total_price: Math.round(update.unitPrice * update.qtySold),
+          sale_id: `sale_${batchTimestamp}_${index}`
+        };
+      });
+
+      let { error: salesInsertErr } = await supabase
+        .from('customer_sales')
+        .insert(customerSalesRows);
+
+      // Handle fallback retry if the user has not yet added the 'sale_id' column to customer_sales
+      if (salesInsertErr && salesInsertErr.message && salesInsertErr.message.includes('sale_id')) {
+        console.warn('sale_id column not found in customer_sales schema. Retrying insertion without sale_id.');
+        const fallbackRows = customerSalesRows.map(row => {
+          const { sale_id, ...rest } = row;
+          return rest;
+        });
+        const { error: retryErr } = await supabase
+          .from('customer_sales')
+          .insert(fallbackRows);
+        salesInsertErr = retryErr;
+      }
+
+      if (salesInsertErr) throw salesInsertErr;
+
+      // 3. Perform Stock Reduction calls in parallel
       await Promise.all(
         stockUpdates.map(async (update) => {
-          const patchData = {};
-          patchData[prodHeaders.stock] = update.newStock.toString();
-          const patchUrl = `${PRODUCTS_URL}/${prodHeaders.id}/${update.productId}`;
-          await axios.patch(patchUrl, { data: patchData });
+          let query = supabase.from('uk_products').update({ stock: update.newStock });
+          
+          if (update.isGeneratedId) {
+            query = query.eq('name', update.originalName);
+          } else {
+            query = query.eq('id', update.productId);
+          }
+          
+          const { error: patchErr } = await query;
+          if (patchErr) throw patchErr;
         })
       );
 
-      // 3. Save all transaction entries to the Sales Sheet
-      // Fetch sales logs to match user columns
-      let salesHeaders = {
-        sale_id: 'sale_id',
-        product_name: 'product_name',
-        category: 'category',
-        quantity: 'quantity',
-        unit_price: 'unit_price',
-        total_price: 'total_price',
-        date: 'date'
-      };
-
+      // 4. Save to uk_sales for dashboard stats log compatibility
       try {
-        const salesGet = await axios.get(SALES_URL);
-        if (salesGet.data && salesGet.data.length > 0) {
-          salesHeaders = detectSalesHeaders(salesGet.data[0]);
-        }
-      } catch (err) {
-        console.warn('Skipped sales header auto-detection:', err.message);
+        const dateStr = new Date().toISOString();
+        const salesRows = stockUpdates.map((update, index) => ({
+          sale_id: `sale_${batchTimestamp}_${index}`,
+          product_id: update.productId,
+          product_name: update.name,
+          category: update.category,
+          quantity: update.qtySold,
+          unit_price: update.unitPrice,
+          total_price: update.unitPrice * update.qtySold,
+          date: dateStr
+        }));
+        await supabase.from('uk_sales').insert(salesRows);
+      } catch (logErr) {
+        console.warn('Dashboard uk_sales logging skipped:', logErr.message);
       }
-
-      const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-      const batchTimestamp = Date.now();
-      const salesRows = stockUpdates.map((update, index) => {
-        const newSale = {};
-        // Make sale_ids unique even in batch checkout
-        newSale[salesHeaders.sale_id] = `sale_${batchTimestamp}_${index}`;
-        newSale[salesHeaders.product_name] = update.name;
-        newSale[salesHeaders.category] = update.category;
-        const targetQty = cartItems.find(item => item.id.toString() === update.productId.toString()).quantity;
-        newSale[salesHeaders.quantity] = targetQty.toString();
-        newSale[salesHeaders.unit_price] = update.unitPrice.toFixed(2);
-        newSale[salesHeaders.total_price] = (update.unitPrice * targetQty).toFixed(2);
-        newSale[salesHeaders.date] = dateStr;
-        return newSale;
-      });
-
-      await axios.post(SALES_URL, {
-        data: salesRows
-      });
 
       return { success: true };
     } catch (error) {
-      console.error('Error executing batch sales in SheetDB:', error);
-      throw error;
+      console.warn('Error executing batch sales in Supabase, falling back locally:', error.message);
+      return executeLocalCheckout(cartItems, customerPhone);
     }
   } else {
-    // Local fallback mode
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const products = getLocalData('uk_products', DUMMY_PRODUCTS);
-    
-    // Verify stock
-    for (const item of cartItems) {
-      const product = products.find(p => p.id.toString() === item.id.toString());
-      if (!product) throw new Error(`Product not found`);
-      const currentStock = parseInt(product.stock, 10);
-      if (currentStock < item.quantity) {
-        throw new Error(`Insufficient stock for "${product.name}". Only ${currentStock} left.`);
-      }
-    }
-
-    // Cut stock
-    for (const item of cartItems) {
-      const product = products.find(p => p.id.toString() === item.id.toString());
-      product.stock = (parseInt(product.stock, 10) - item.quantity).toString();
-    }
-    saveLocalData('uk_products', products);
-
-    // Save logs
-    const sales = getLocalData('uk_sales', DUMMY_SALES);
-    const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const batchTimestamp = Date.now();
-
-    cartItems.forEach((item, index) => {
-      const product = DUMMY_PRODUCTS.find(p => p.id.toString() === item.id.toString()) || item;
-      const newSale = {
-        sale_id: `sale_${batchTimestamp}_${index}`,
-        product_name: item.name || product.name,
-        category: item.category || product.category,
-        quantity: item.quantity.toString(),
-        unit_price: parseFloat(item.sell_price).toFixed(2),
-        total_price: (parseFloat(item.sell_price) * item.quantity).toFixed(2),
-        date: dateStr
-      };
-      sales.unshift(newSale);
-    });
-    saveLocalData('uk_sales', sales);
-
-    return { success: true };
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalCheckout(cartItems, customerPhone);
   }
 };
 
 // Fetch sales transaction history
 export const getSalesHistory = async () => {
-  if (isApiConfigured()) {
+  if (isSupabaseConfigured()) {
     try {
-      const response = await axios.get(SALES_URL);
-      if (!response.data || response.data.length === 0) return [];
-      
-      const headers = detectSalesHeaders(response.data[0]);
+      const { data, error } = await supabase
+        .from('uk_sales')
+        .select('*')
+        .order('date', { ascending: false });
 
-      return response.data.map(s => ({
-        sale_id: (s[headers.sale_id] || '').toString(),
-        product_name: (s[headers.product_name] || '').toString(),
-        category: (s[headers.category] || '').toString(),
-        quantity: parseInt(s[headers.quantity] || 0, 10),
-        unit_price: parseFloat(s[headers.unit_price] || 0),
-        total_price: parseFloat(s[headers.total_price] || 0),
-        date: (s[headers.date] || '').toString(),
+      if (error) throw error;
+
+      return (data || []).map(s => ({
+        sale_id: s.sale_id,
+        product_name: s.product_name,
+        category: s.category || '',
+        quantity: parseInt(s.quantity || 0, 10),
+        unit_price: parseFloat(s.unit_price || 0),
+        total_price: parseFloat(s.total_price || 0),
+        date: s.date || '',
       }));
     } catch (error) {
-      console.error('Error fetching sales history from SheetDB, failing over to mock:', error);
-      throw error;
+      console.warn('Error fetching sales history from Supabase, falling back to local storage:', error.message);
+      return getLocalSalesFallback();
     }
   } else {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const sales = getLocalData('uk_sales', DUMMY_SALES);
-    return sales.map(s => ({
-      ...s,
-      quantity: parseInt(s.quantity || 0, 10),
-      unit_price: parseFloat(s.unit_price || 0),
-      total_price: parseFloat(s.total_price || 0)
-    }));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalSalesFallback();
   }
 };
