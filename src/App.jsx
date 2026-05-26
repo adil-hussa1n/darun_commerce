@@ -85,7 +85,7 @@ export default function App() {
               UK STORE
             </h1>
             <p className="text-[10px] text-beauty-taupe tracking-widest font-semibold mt-1">
-              INVENTORY SYSTEM
+              BUSINESS MANAGEMENT SYSTEM
             </p>
           </div>
           <div className="w-24 h-0.5 bg-beauty-rose/40 rounded-full overflow-hidden relative mt-1">

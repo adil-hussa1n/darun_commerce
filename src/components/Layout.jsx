@@ -15,7 +15,7 @@ export default function Layout({ children, cart = [] }) {
   const navItems = [
     { to: '/', name: 'Dashboard', icon: LayoutDashboard },
     { to: '/add-product', name: 'Product Management', icon: PlusCircle },
-    { to: '/sell-products', name: 'Sell Products', icon: ShoppingBag },
+    { to: '/sell-products', name: 'Create Sale', icon: ShoppingBag },
   ];
 
   const handleLinkClick = () => {
@@ -70,7 +70,7 @@ export default function Layout({ children, cart = [] }) {
                 UK STORE
               </h1>
               <p className="text-[10px] text-beauty-taupe tracking-widest font-semibold mt-1">
-                INVENTORY SYSTEM
+                BUSINESS MANAGEMENT SYSTEM
               </p>
             </div>
           </div>
@@ -100,7 +100,11 @@ export default function Layout({ children, cart = [] }) {
             })}
           </nav>
         </div>
-
+        {/* Footer badge */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-beauty-accent/10 border border-beauty-accent/25">
+          <div className="w-2 h-2 rounded-full bg-beauty-accent animate-pulse" />
+          <span className="text-[10px] text-beauty-accent font-semibold">Free Trial Version</span>
+        </div>
       </aside>
 
       {/* Main Content Area */}

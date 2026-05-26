@@ -129,11 +129,11 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
           className="flex items-center gap-1.5 text-xs font-semibold text-beauty-taupe hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Sell Products
+          Back to Create Sales
         </button>
         <div className="flex items-center gap-2">
           <h2 className="text-3xl font-extrabold tracking-tight text-white">
-            Checkout Cart
+            Checkout Invoice
           </h2>
         </div>
         <p className="text-beauty-taupe text-sm">
@@ -152,13 +152,13 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
               </div>
               <h3 className="text-lg font-bold text-white">Your Cart is Empty</h3>
               <p className="text-xs text-beauty-taupe mt-1.5 mb-6">
-                Go back to the POS page to add skincare products.
+                Go back to the Create Sale page to add skincare products.
               </p>
               <Link 
                 to="/sell-products"
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-bold tracking-wide transition-all"
               >
-                Go to POS
+                Go to Create Sale
               </Link>
             </div>
           ) : (
@@ -281,7 +281,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
               ) : (
                 <>
                   <CheckCircle className="w-5 h-5" />
-                  Confirm Sell Product
+                  Create Sale
                 </>
               )}
             </button>
@@ -321,7 +321,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                     UK STORE
                   </h3>
                   <p style={{ fontSize: '10px', color: '#8D7B70', fontFamily: 'sans-serif', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
-                    Premium Skincare, Body & Hair Care
+                    Premium Skin, Body & Hair Care
                   </p>
                   <p style={{ fontSize: '9px', color: '#8D7B70', opacity: 0.8, fontFamily: 'sans-serif', margin: '0' }}>
                     Musa Market, Beanibazar, Sylhet | Support: info@ukstore.com
@@ -378,7 +378,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #EAD5C9', fontSize: '8px', color: '#8D7B70', marginTop: '16px', lineHeight: '1.4' }}>
                   <p style={{ fontWeight: 'bold', color: '#2C2523', fontSize: '10px', margin: '0 0 4px 0' }}>Thank You for Shopping!</p>
                   <p style={{ margin: '0 0 2px 0' }}>Exchange within 7 days with original receipt.</p>
-                  <p style={{ margin: '0' }}>System by UK Store Inventory Manager</p>
+                  <p style={{ margin: '0' }}>System by UK Store Business Manager</p>
                 </div>
               </div>
             </div>

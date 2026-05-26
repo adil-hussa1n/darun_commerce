@@ -91,7 +91,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div className="space-y-3">
           <h2 className="text-3xl font-extrabold tracking-tight text-white">
-            Point of Sale (POS)
+            Create Sale
           </h2>
           {/* Highlighted instruction banner */}
           <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-beauty-accent/10 border border-beauty-accent/25 w-fit">

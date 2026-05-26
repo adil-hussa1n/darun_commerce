@@ -8,7 +8,9 @@ import {
   Loader2,
   Search,
   X,
-  Package
+  Package,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { addProduct, getProducts } from '../services/api';
 
@@ -20,6 +22,8 @@ export default function AddProduct() {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   const [form, setForm] = useState({
     name: '',
@@ -107,6 +111,11 @@ export default function AddProduct() {
     return `৳ ${num.toFixed(2)}`;
   };
 
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // Filtered products for the list
   const filteredProducts = products.filter(product => {
     const q = searchQuery.toLowerCase().trim();
@@ -116,6 +125,13 @@ export default function AddProduct() {
       (product.category || '').toLowerCase().includes(q)
     );
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -174,58 +190,90 @@ export default function AddProduct() {
             <p className="text-xs text-beauty-taupe">No products found. Add one below.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] font-bold uppercase tracking-wider text-beauty-taupe border-b border-white/5">
-                  <th className="py-3 px-5 font-semibold">Image</th>
-                  <th className="py-3 px-5 font-semibold">Name</th>
-                  <th className="py-3 px-5 font-semibold">Category</th>
-                  <th className="py-3 px-5 font-semibold text-right">Buy ৳</th>
-                  <th className="py-3 px-5 font-semibold text-right">Sell ৳</th>
-                  <th className="py-3 px-5 font-semibold text-right">Stock</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                {filteredProducts.map((product) => {
-                  const isLow = product.stock > 0 && product.stock < 5;
-                  const isOut = product.stock <= 0;
-                  return (
-                    <tr key={product.id} className="hover:bg-beauty-blush/30 transition-colors">
-                      <td className="py-3 px-5 shrink-0">
-                        <img
-                          src={product.image || DEFAULT_IMAGE_PREVIEW}
-                          alt={product.name}
-                          className="w-10 h-10 object-contain rounded-lg border border-white/10 bg-beauty-cream"
-                          onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMAGE_PREVIEW; }}
-                        />
-                      </td>
-                      <td className="py-3 px-5 font-semibold text-white max-w-[200px] truncate">{product.name}</td>
-                      <td className="py-3 px-5 text-beauty-taupe">{product.category || '—'}</td>
-                      <td className="py-3 px-5 text-right text-beauty-taupe">{formatCurrency(product.buy_price)}</td>
-                      <td className="py-3 px-5 text-right font-bold text-white">{formatCurrency(product.sell_price)}</td>
-                      <td className="py-3 px-5 text-right">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          isOut ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
-                          isLow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/25' :
-                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        }`}>
-                          {product.stock}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[10px] font-bold uppercase tracking-wider text-beauty-taupe border-b border-white/5">
+                    <th className="py-3 px-5 font-semibold">Image</th>
+                    <th className="py-3 px-5 font-semibold">Name</th>
+                    <th className="py-3 px-5 font-semibold">Category</th>
+                    <th className="py-3 px-5 font-semibold text-right">Buy ৳</th>
+                    <th className="py-3 px-5 font-semibold text-right">Sell ৳</th>
+                    <th className="py-3 px-5 font-semibold text-right">Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-xs text-white/90">
+                  {paginatedProducts.map((product) => {
+                    const isLow = product.stock > 0 && product.stock < 5;
+                    const isOut = product.stock <= 0;
+                    return (
+                      <tr key={product.id} className="hover:bg-beauty-blush/30 transition-colors">
+                        <td className="py-3 px-5 shrink-0">
+                          <img
+                            src={product.image || DEFAULT_IMAGE_PREVIEW}
+                            alt={product.name}
+                            className="w-10 h-10 object-contain rounded-lg border border-white/10 bg-beauty-cream"
+                            onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMAGE_PREVIEW; }}
+                          />
+                        </td>
+                        <td className="py-3 px-5 font-semibold text-white max-w-[200px] truncate">{product.name}</td>
+                        <td className="py-3 px-5 text-beauty-taupe">{product.category || '—'}</td>
+                        <td className="py-3 px-5 text-right text-beauty-taupe">{formatCurrency(product.buy_price)}</td>
+                        <td className="py-3 px-5 text-right font-bold text-white">{formatCurrency(product.sell_price)}</td>
+                        <td className="py-3 px-5 text-right">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isOut ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                            isLow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/25' :
+                            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            {product.stock}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="px-6 py-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="text-xs text-beauty-taupe">
+                Page <span className="font-bold text-white">{currentPage}</span> of <span className="font-bold text-white">{totalPages}</span> 
+                <span className="text-beauty-taupe/60 ml-2">({filteredProducts.length} total)</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-beauty-cream/30 hover:bg-beauty-cream/50 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+                
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-beauty-accent hover:bg-beauty-accent/90 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                  title="Next page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
       {/* ─── Add New Product Section ─── */}
       <div className="space-y-2">
         <h3 className="text-xl font-bold text-white tracking-tight">Add New Product</h3>
-        <p className="text-beauty-taupe text-sm">Fill in the details below to register a new product.</p>
+        <p className="text-beauty-taupe text-sm">Fill in the details below to add a new product.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
@@ -328,7 +376,7 @@ export default function AddProduct() {
 
           {/* Field: Product Image URL */}
           <div>
-            <label htmlFor="image" className="beauty-label">Product Image URL</label>
+            <label htmlFor="image" className="beauty-label opacity-50 cursor-not-allowed">Product Image URL</label>
             <input
               type="url"
               id="image"
@@ -336,10 +384,11 @@ export default function AddProduct() {
               value={form.image}
               onChange={handleChange}
               placeholder="https://images.unsplash.com/..."
-              className="beauty-input"
+              className="beauty-input opacity-50 cursor-not-allowed"
+              disabled
             />
-            <p className="text-[10px] text-beauty-taupe mt-1">
-              Provide a direct link to an image. (Tip: Use Unsplash for studio product shots).
+            <p className="text-[10px] text-beauty-taupe mt-1 opacity-50">
+              This field is currently disabled.
             </p>
           </div>
 

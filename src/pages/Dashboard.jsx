@@ -121,33 +121,34 @@ export default function Dashboard() {
           </h2>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-          {/* Product Management button */}
-          <Link 
-            to="/add-product"
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs hover:shadow-md"
-          >
-            <Plus className="w-4 h-4" />
-            Product Management
-          </Link>
-          {/* Create Sale + Sync in a row */}
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* Create Sale button */}
             <Link 
               to="/sell-products"
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs"
             >
               <ShoppingBag className="w-4 h-4" />
               Create Sale
             </Link>
-            <button
-              onClick={() => loadDashboardData(true)}
-              disabled={syncing}
-              title="Sync data"
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            {/* Product Management button */}
+            <Link 
+              to="/add-product"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs hover:shadow-md"
             >
-              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              Sync
-            </button>
+              <Plus className="w-4 h-4" />
+              Product Management
+            </Link>
           </div>
+          {/* Sync button on the right */}
+          <button
+            onClick={() => loadDashboardData(true)}
+            disabled={syncing}
+            title="Sync data"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            Sync
+          </button>
         </div>
       </div>
 
@@ -264,7 +265,7 @@ export default function Dashboard() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
-                      <th className="pb-3 pr-4 font-semibold">Customer Phone</th>
+                      <th className="pb-3 pr-4 font-semibold">Mobile Number</th>
                       <th className="pb-3 px-4 font-semibold">Product</th>
                       <th className="pb-3 px-4 font-semibold">Category</th>
                       <th className="pb-3 px-4 font-semibold text-right">Qty</th>
