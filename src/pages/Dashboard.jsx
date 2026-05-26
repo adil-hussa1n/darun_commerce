@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  DollarSign, 
+  Banknote,
   Package, 
   TrendingUp, 
   Plus, 
   ArrowRight,
   ShoppingBag,
   RefreshCw,
-  Handshake
+  Handshake,
+  Wallet,
+  Receipt
 } from 'lucide-react';
 import { getProducts, getSalesHistory } from '../services/api';
 import { DashboardSkeleton } from '../components/Skeleton';
@@ -34,7 +36,7 @@ export default function Dashboard() {
       setProducts(prodList);
       setSales(salesList);
       if (isManual) {
-        toast.success('Inventory synced with Google Sheets!');
+        toast.success('Inventory synced successfully!');
       }
     } catch (err) {
       if (!isSilent) {
@@ -49,7 +51,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardData();
-    // Auto-sync every 12 seconds in the background
     const interval = setInterval(() => {
       loadDashboardData(false, true);
     }, 12000);
@@ -72,10 +73,9 @@ export default function Dashboard() {
   
   // Total Revenue & Units Sold
   const totalRevenue = sales.reduce((acc, sale) => acc + parseFloat(sale.total_price || 0), 0);
-  const totalOrdersCount = sales.length;
+  const totalPurchaseCount = sales.length;
 
-  // Total Profit: (unit_price - buy_price) * quantity
-  // If product not found in products list, fall back to 50% margin: total_price * 0.5
+  // Total Profit
   const totalProfit = sales.reduce((acc, sale) => {
     const product = products.find(p => p.name.trim().toLowerCase() === sale.product_name.trim().toLowerCase());
     if (product) {
@@ -87,6 +87,11 @@ export default function Dashboard() {
       const totalPrice = parseFloat(sale.total_price || 0);
       return acc + (totalPrice * 0.5);
     }
+  }, 0);
+
+  // Stock Investment: sum of (buy_price * stock) for all products
+  const stockInvestment = products.reduce((acc, p) => {
+    return acc + (parseFloat(p.buy_price || 0) * parseInt(p.stock || 0, 10));
   }, 0);
 
   // Format currencies
@@ -115,29 +120,34 @@ export default function Dashboard() {
             Shop Overview
           </h2>
         </div>
-        <div className="flex gap-3 flex-wrap">
-          <button
-            onClick={() => loadDashboardData(true)}
-            disabled={syncing}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            Sync
-          </button>
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          {/* Product Management button */}
           <Link 
             to="/add-product"
             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs hover:shadow-md"
           >
             <Plus className="w-4 h-4" />
-            Add Product
+            Product Management
           </Link>
-          <Link 
-            to="/sell-products"
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            Sell Products
-          </Link>
+          {/* Create Sale + Sync in a row */}
+          <div className="flex gap-2 items-center">
+            <Link 
+              to="/sell-products"
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              Create Sale
+            </Link>
+            <button
+              onClick={() => loadDashboardData(true)}
+              disabled={syncing}
+              title="Sync data"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              Sync
+            </button>
+          </div>
         </div>
       </div>
 
@@ -158,7 +168,25 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
-            <DollarSign className="w-6 h-6" />
+            <Banknote className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* KPI: Total Purchase */}
+        <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
+              Total Purchase
+            </span>
+            <h3 className="text-2xl font-bold tracking-tight text-white">
+              {totalPurchaseCount}
+            </h3>
+            <span className="text-[10px] text-beauty-taupe/80 block">
+              Successful checkouts
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
+            <Receipt className="w-6 h-6" />
           </div>
         </div>
 
@@ -180,39 +208,21 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KPI: Unique Products */}
+        {/* KPI: Stock Investment */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
           <div className="space-y-1">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
-              Active Products
+              Stock Investment
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-white">
-              {totalProducts}
+            <h3 className="text-2xl font-bold tracking-tight text-amber-400">
+              {formatCurrency(stockInvestment)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
-              Total catalog size
+              Total capital in stock
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
-            <Package className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* KPI: Total Orders */}
-        <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
-              Total Orders
-            </span>
-            <h3 className="text-2xl font-bold tracking-tight text-white">
-              {totalOrdersCount}
-            </h3>
-            <span className="text-[10px] text-beauty-taupe/80 block">
-              Successful checkouts
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
-            <ShoppingBag className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
+            <Wallet className="w-6 h-6" />
           </div>
         </div>
 
@@ -221,23 +231,20 @@ export default function Dashboard() {
       {/* Main Grid: Transactions (Full Width) */}
       <div className="grid grid-cols-1 gap-8">
         
-        {/* Recent Transactions List */}
+        {/* Recent Purchasing History */}
         <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-bold text-white font-sans">
-                  Recent Sales Log
+                  Recent Purchasing History
                 </h3>
-                <p className="text-xs text-beauty-taupe mt-0.5">
-                  Latest customer purchases recorded in Google Sheets.
-                </p>
               </div>
               <Link 
                 to="/sell-products" 
                 className="text-xs font-semibold text-beauty-accent hover:text-white flex items-center gap-1 group transition-colors"
               >
-                New Sale
+                Create Sale
                 <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>
@@ -257,7 +264,7 @@ export default function Dashboard() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
-                      <th className="pb-3 pr-4 font-semibold">Sale ID</th>
+                      <th className="pb-3 pr-4 font-semibold">Customer Phone</th>
                       <th className="pb-3 px-4 font-semibold">Product</th>
                       <th className="pb-3 px-4 font-semibold">Category</th>
                       <th className="pb-3 px-4 font-semibold text-right">Qty</th>
@@ -266,10 +273,10 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                    {sales.slice(0, 10).map((sale) => (
-                      <tr key={sale.sale_id} className="hover:bg-beauty-blush/30 transition-colors">
+                    {sales.slice(0, 10).map((sale, idx) => (
+                      <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
                         <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe">
-                          {sale.sale_id.replace('sale_', '#')}
+                          {sale.customer_phone || '—'}
                         </td>
                         <td className="py-3.5 px-4 font-medium max-w-[240px] truncate">
                           {sale.product_name}

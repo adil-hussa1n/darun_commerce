@@ -490,6 +490,7 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
           quantity: update.qtySold,
           unit_price: update.unitPrice,
           total_price: update.unitPrice * update.qtySold,
+          customer_phone: customerPhone || '',
           date: dateStr
         }));
         await supabase.from('uk_sales').insert(salesRows);
@@ -526,6 +527,7 @@ export const getSalesHistory = async () => {
         quantity: parseInt(s.quantity || 0, 10),
         unit_price: parseFloat(s.unit_price || 0),
         total_price: parseFloat(s.total_price || 0),
+        customer_phone: s.customer_phone || '',
         date: s.date || '',
       }));
     } catch (error) {

@@ -14,7 +14,7 @@ export default function Layout({ children, cart = [] }) {
 
   const navItems = [
     { to: '/', name: 'Dashboard', icon: LayoutDashboard },
-    { to: '/add-product', name: 'Add Product', icon: PlusCircle },
+    { to: '/add-product', name: 'Product Management', icon: PlusCircle },
     { to: '/sell-products', name: 'Sell Products', icon: ShoppingBag },
   ];
 

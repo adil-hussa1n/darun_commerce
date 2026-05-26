@@ -7,7 +7,9 @@ import {
   Minus,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  Info
 } from 'lucide-react';
 import { getProducts } from '../services/api';
 import { TableRowSkeleton } from '../components/Skeleton';
@@ -22,7 +24,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 7; // Only show 7 items per page
+  const itemsPerPage = 7;
 
   const loadProducts = async (isSilent = false) => {
     try {
@@ -45,7 +47,6 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
 
   useEffect(() => {
     loadProducts();
-    // Auto-sync every 12 seconds in the background
     const interval = setInterval(() => {
       loadProducts(true);
     }, 12000);
@@ -57,11 +58,10 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  // Filter products based on name, notes, category, or ID (highly functional search)
+  // Filter products
   const filteredProducts = products.filter(product => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
-    
     return (
       (product.name || '').toLowerCase().includes(query) ||
       (product.category || '').toLowerCase().includes(query) ||
@@ -88,38 +88,28 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
     <div className="space-y-8 animate-fade-in relative">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+        <div className="space-y-3">
           <h2 className="text-3xl font-extrabold tracking-tight text-white">
             Point of Sale (POS)
           </h2>
-          <p className="text-beauty-taupe text-sm mt-1">
-            Add items to your cart, then click "View Cart" to confirm and print your invoice.
-          </p>
+          {/* Highlighted instruction banner */}
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-beauty-accent/10 border border-beauty-accent/25 w-fit">
+            <Info className="w-4 h-4 text-beauty-accent shrink-0" />
+            <p className="text-beauty-accent text-sm font-semibold">
+              Add items to your invoice, then click{' '}
+              <span className="text-white font-bold">"View Invoice"</span>{' '}
+              to confirm.
+            </p>
+          </div>
         </div>
-        
-        {/* Cart Link button */}
-        <Link
-          to="/cart"
-          className="relative flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-bold tracking-wide uppercase transition-all shadow-md shrink-0"
-          aria-label="View Cart"
-        >
-          <CartIcon className="w-4 h-4" />
-          View Cart
-          {totalItemsInCart > 0 && (
-            <span className="bg-white text-beauty-accent font-bold px-2 py-0.5 rounded-full text-xs animate-pulse">
-              {totalItemsInCart}
-            </span>
-          )}
-        </Link>
       </div>
 
       <div className="space-y-6">
         
-        {/* Controls: Search Bar only (Category removed) */}
+        {/* Controls: Search Bar */}
         <div className="flex justify-start w-full">
           <div className="relative w-full max-w-md flex items-center">
-            {/* Absolute positioning with explicit sizing prevents icon collapsing */}
             <Search 
               className="absolute text-beauty-taupe pointer-events-none shrink-0" 
               style={{ left: '14px', width: '16px', height: '16px' }}
@@ -173,7 +163,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
             </div>
             <h3 className="text-lg font-bold text-white">No Products Found</h3>
             <p className="text-xs text-beauty-taupe mt-1.5 leading-relaxed">
-              Try clearing filters or search term to load skincare products.
+              Try clearing filters or search term to load products.
             </p>
           </div>
         ) : (
@@ -278,11 +268,9 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
             
             {/* Pagination Controls */}
             {filteredProducts.length > 0 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-[#151030] rounded-b-2xl">
-                <span className="text-xs text-beauty-taupe">
-                  Showing {Math.min(filteredProducts.length, (currentPage - 1) * itemsPerPage + 1)} to {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of {filteredProducts.length} products
-                </span>
-                <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-[#151030] rounded-b-2xl gap-3">
+                {/* Left: page controls */}
+                <div className="flex items-center gap-3">
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
@@ -291,7 +279,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <span className="text-xs font-semibold text-white">
+                  <span className="text-xs font-semibold text-white whitespace-nowrap">
                     Page {currentPage} of {totalPages}
                   </span>
                   <button
@@ -303,6 +291,21 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                     <ChevronRight className="w-5 h-5" />
                   </button>
                 </div>
+
+                {/* Right: View Invoice button */}
+                <Link
+                  to="/cart"
+                  className="relative flex items-center justify-center gap-2 flex-1 max-w-xs py-2.5 px-6 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-bold tracking-wide uppercase transition-all shadow-md"
+                  aria-label="View Invoice"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Invoice
+                  {totalItemsInCart > 0 && (
+                    <span className="bg-white text-beauty-accent font-bold px-2 py-0.5 rounded-full text-xs animate-pulse">
+                      {totalItemsInCart}
+                    </span>
+                  )}
+                </Link>
               </div>
             )}
           </div>

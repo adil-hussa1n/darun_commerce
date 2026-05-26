@@ -1,20 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { 
-  Sparkles, 
   Image as ImageIcon, 
   ArrowLeft, 
   Save, 
-  Loader2 
+  Loader2,
+  Search,
+  X,
+  Package
 } from 'lucide-react';
-import { addProduct } from '../services/api';
+import { addProduct, getProducts } from '../services/api';
 
 const DEFAULT_IMAGE_PREVIEW = '/logo.png';
 
 export default function AddProduct() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [form, setForm] = useState({
     name: '',
     category: '',
@@ -24,6 +30,21 @@ export default function AddProduct() {
     image: '',
     notes: ''
   });
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoadingProducts(true);
+        const data = await getProducts();
+        setProducts(data);
+      } catch {
+        /* silent */
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -71,28 +92,35 @@ export default function AddProduct() {
       setSubmitting(true);
       await addProduct(form);
       toast.success('Product added successfully!');
-      
-      // Clear form or redirect
       navigate('/');
     } catch (err) {
-      toast.error('Failed to save product to Google Sheets. Check configuration.');
+      toast.error('Failed to save product. Check configuration.');
       console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Generate formatting helper
   const formatCurrency = (val) => {
     const num = parseFloat(val);
     if (isNaN(num)) return '৳ 0.00';
     return `৳ ${num.toFixed(2)}`;
   };
 
+  // Filtered products for the list
+  const filteredProducts = products.filter(product => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (product.name || '').toLowerCase().includes(q) ||
+      (product.category || '').toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-8 animate-fade-in">
       
-      {/* Header and Go Back */}
+      {/* Header */}
       <div className="space-y-2">
         <button 
           onClick={() => navigate(-1)}
@@ -101,19 +129,108 @@ export default function AddProduct() {
           <ArrowLeft className="w-4 h-4" />
           Back to Overview
         </button>
-        <div className="flex items-center gap-2">
-          <h2 className="text-3xl font-extrabold tracking-tight text-white">
-            Register New Product
-          </h2>
-        </div>
+        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+          Product Management
+        </h2>
         <p className="text-beauty-taupe text-sm">
-          Add a brand-new beauty or skincare product to the Google Sheets inventory.
+          Manage your inventory — view existing products and add new ones below.
         </p>
+      </div>
+
+      {/* ─── Existing Products Table ─── */}
+      <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 pt-5 pb-4 border-b border-white/5">
+          <h3 className="text-sm font-bold text-white tracking-wide">All Products</h3>
+          {/* Search */}
+          <div className="relative w-full sm:max-w-xs flex items-center">
+            <Search
+              className="absolute text-beauty-taupe pointer-events-none shrink-0"
+              style={{ left: '12px', width: '14px', height: '14px' }}
+            />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full py-2 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all duration-200 placeholder:text-beauty-taupe/40 text-xs"
+              style={{ paddingLeft: '32px', paddingRight: '32px' }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 text-beauty-taupe/65 hover:text-white cursor-pointer"
+              >
+                <X style={{ width: '13px', height: '13px' }} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {loadingProducts ? (
+          <div className="py-10 text-center text-beauty-taupe text-xs animate-pulse">Loading products...</div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-12 text-center">
+            <Package className="w-8 h-8 text-beauty-taupe/30 mx-auto mb-3" />
+            <p className="text-xs text-beauty-taupe">No products found. Add one below.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-[10px] font-bold uppercase tracking-wider text-beauty-taupe border-b border-white/5">
+                  <th className="py-3 px-5 font-semibold">Image</th>
+                  <th className="py-3 px-5 font-semibold">Name</th>
+                  <th className="py-3 px-5 font-semibold">Category</th>
+                  <th className="py-3 px-5 font-semibold text-right">Buy ৳</th>
+                  <th className="py-3 px-5 font-semibold text-right">Sell ৳</th>
+                  <th className="py-3 px-5 font-semibold text-right">Stock</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-xs text-white/90">
+                {filteredProducts.map((product) => {
+                  const isLow = product.stock > 0 && product.stock < 5;
+                  const isOut = product.stock <= 0;
+                  return (
+                    <tr key={product.id} className="hover:bg-beauty-blush/30 transition-colors">
+                      <td className="py-3 px-5 shrink-0">
+                        <img
+                          src={product.image || DEFAULT_IMAGE_PREVIEW}
+                          alt={product.name}
+                          className="w-10 h-10 object-contain rounded-lg border border-white/10 bg-beauty-cream"
+                          onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMAGE_PREVIEW; }}
+                        />
+                      </td>
+                      <td className="py-3 px-5 font-semibold text-white max-w-[200px] truncate">{product.name}</td>
+                      <td className="py-3 px-5 text-beauty-taupe">{product.category || '—'}</td>
+                      <td className="py-3 px-5 text-right text-beauty-taupe">{formatCurrency(product.buy_price)}</td>
+                      <td className="py-3 px-5 text-right font-bold text-white">{formatCurrency(product.sell_price)}</td>
+                      <td className="py-3 px-5 text-right">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          isOut ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                          isLow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/25' :
+                          'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          {product.stock}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Add New Product Section ─── */}
+      <div className="space-y-2">
+        <h3 className="text-xl font-bold text-white tracking-tight">Add New Product</h3>
+        <p className="text-beauty-taupe text-sm">Fill in the details below to register a new product.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
         
-        {/* Registration Form (3/5 width) */}
+        {/* Form (3/5 width) */}
         <form 
           onSubmit={handleSubmit}
           className="lg:col-span-3 bg-beauty-rose p-6 md:p-8 rounded-2xl border border-white/5 shadow-md space-y-6"
@@ -228,7 +345,7 @@ export default function AddProduct() {
 
           {/* Field: Notes/Description */}
           <div>
-            <label htmlFor="notes" className="beauty-label">Notes & Description</label>
+            <label htmlFor="notes" className="beauty-label">Notes &amp; Description</label>
             <textarea
               id="notes"
               name="notes"
@@ -249,12 +366,12 @@ export default function AddProduct() {
             {submitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Saving to Google Sheets...
+                Saving...
               </>
             ) : (
               <>
                 <Save className="w-5 h-5" />
-                Register Product
+                Add Product
               </>
             )}
           </button>
@@ -274,7 +391,6 @@ export default function AddProduct() {
                 alt="Product Preview" 
                 className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105 drop-shadow-lg"
                 onError={(e) => {
-                  // Fallback if URL is invalid
                   e.target.onerror = null;
                   e.target.src = DEFAULT_IMAGE_PREVIEW;
                 }}
@@ -326,7 +442,7 @@ export default function AddProduct() {
               {/* Status Tags */}
               <div className="flex justify-between items-center text-[10px]">
                 <div className="flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-beauty-accent" />
+                  <Package className="w-3.5 h-3.5 text-beauty-accent" />
                   <span className="font-semibold text-beauty-taupe">Created today</span>
                 </div>
                 {parseInt(form.stock, 10) < 5 && (
