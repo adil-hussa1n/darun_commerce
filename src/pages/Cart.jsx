@@ -64,7 +64,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
       setInvoice(newInvoice);
       clearCart(); // Clear cart state ONLY on successful checkout
       if (res && res.local) {
-        toast.warning('Sheets rate limit exceeded. Sale recorded locally!');
+        toast.warning('Network issue — sale recorded locally. Will sync later.');
       } else {
         toast.success('Sale recorded successfully! Invoice generated.');
       }

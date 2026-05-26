@@ -360,7 +360,7 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
   if (isSupabaseConfigured()) {
     try {
       const batchTimestamp = Date.now();
-      
+
       // 1. Fetch current raw products to check stock
       const { data: dbProducts, error: fetchErr } = await supabase
         .from('uk_products')
@@ -375,9 +375,9 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
         const product = dbProducts.find(p => {
           const dbId = (p.id || '').toString().trim();
           const dbName = (p.name || '').toString().trim();
-          
+
           if (dbId && dbId === item.id) return true;
-          
+
           if (!dbId && item.id.startsWith('prod_sh_')) {
             let hash = 0;
             for (let i = 0; i < dbName.length; i++) {
@@ -402,6 +402,7 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
         const dbId = (product.id || '').toString().trim();
         stockUpdates.push({
           productId: item.id,
+          dbProductId: dbId || null,
           isGeneratedId: !dbId,
           originalName: product.name,
           newStock: currentStock - item.quantity,
@@ -412,43 +413,21 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
         });
       }
 
-      // 2. Insert transaction records into Supabase customer_sales
-      const customerSalesRows = stockUpdates.map((update, index) => {
-        let numericProductId = null;
-        if (update.productId) {
-          const digits = update.productId.replace(/\D/g, '');
-          if (digits) {
-            const num = parseInt(digits, 10);
-            if (num <= 9007199254740991) {
-              numericProductId = num;
-            } else {
-              numericProductId = parseInt(digits.slice(-15), 10);
-            }
-          } else {
-            // Fallback hashing if no digits are present
-            let hash = 0;
-            for (let i = 0; i < update.productId.length; i++) {
-              hash = (hash << 5) - hash + update.productId.charCodeAt(i);
-              hash |= 0;
-            }
-            numericProductId = Math.abs(hash);
-          }
-        }
-
-        return {
-          product_id: numericProductId,
-          customer_phone: customerPhone,
-          quantity: update.qtySold,
-          total_price: Math.round(update.unitPrice * update.qtySold),
-          sale_id: `sale_${batchTimestamp}_${index}`
-        };
-      });
+      // 2. Insert transaction records into Supabase customer_sales (canonical sales table)
+      // product_id column is TEXT, so the original product id string is preserved.
+      const customerSalesRows = stockUpdates.map((update, index) => ({
+        product_id: (update.dbProductId || update.productId || '').toString(),
+        customer_phone: customerPhone || '',
+        quantity: update.qtySold,
+        total_price: Math.round(update.unitPrice * update.qtySold),
+        sale_id: `sale_${batchTimestamp}_${index}`
+      }));
 
       let { error: salesInsertErr } = await supabase
         .from('customer_sales')
         .insert(customerSalesRows);
 
-      // Handle fallback retry if the user has not yet added the 'sale_id' column to customer_sales
+      // Backward-compatible retry: drop sale_id if the column hasn't been added yet
       if (salesInsertErr && salesInsertErr.message && salesInsertErr.message.includes('sale_id')) {
         console.warn('sale_id column not found in customer_sales schema. Retrying insertion without sale_id.');
         const fallbackRows = customerSalesRows.map(row => {
@@ -467,40 +446,42 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
       await Promise.all(
         stockUpdates.map(async (update) => {
           let query = supabase.from('uk_products').update({ stock: update.newStock });
-          
+
           if (update.isGeneratedId) {
             query = query.eq('name', update.originalName);
           } else {
-            query = query.eq('id', update.productId);
+            query = query.eq('id', update.dbProductId || update.productId);
           }
-          
+
           const { error: patchErr } = await query;
           if (patchErr) throw patchErr;
         })
       );
 
-      // 4. Save to uk_sales for dashboard stats log compatibility
+      // 4. Best-effort backup logging into uk_sales (legacy table — schema may not include
+      // customer_phone, so we exclude it. Failures here are non-fatal because customer_sales
+      // is the authoritative source for the dashboard.)
       try {
         const dateStr = new Date().toISOString();
         const salesRows = stockUpdates.map((update, index) => ({
           sale_id: `sale_${batchTimestamp}_${index}`,
-          product_id: update.productId,
+          product_id: (update.dbProductId || update.productId || '').toString(),
           product_name: update.name,
           category: update.category,
           quantity: update.qtySold,
           unit_price: update.unitPrice,
           total_price: update.unitPrice * update.qtySold,
-          customer_phone: customerPhone || '',
           date: dateStr
         }));
-        await supabase.from('uk_sales').insert(salesRows);
+        const { error: logErr } = await supabase.from('uk_sales').insert(salesRows);
+        if (logErr) console.warn('Backup uk_sales logging skipped:', logErr.message);
       } catch (logErr) {
-        console.warn('Dashboard uk_sales logging skipped:', logErr.message);
+        console.warn('Backup uk_sales logging skipped:', logErr.message);
       }
 
       return { success: true };
     } catch (error) {
-      console.warn('Error executing batch sales in Supabase, falling back locally:', error.message);
+      console.error('Error executing batch sales in Supabase, falling back locally:', error.message);
       return executeLocalCheckout(cartItems, customerPhone);
     }
   } else {
@@ -510,26 +491,61 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
 };
 
 // Fetch sales transaction history
+// Sales are persisted in `customer_sales` (the canonical source). We enrich the rows
+// with product info (name, category, unit price) by looking them up in `uk_products`.
 export const getSalesHistory = async () => {
   if (isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase
-        .from('uk_sales')
-        .select('*')
-        .order('date', { ascending: false });
+      const [salesRes, productsRes] = await Promise.all([
+        supabase
+          .from('customer_sales')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('uk_products')
+          .select('id, name, category, sell_price')
+      ]);
 
-      if (error) throw error;
+      if (salesRes.error) throw salesRes.error;
+      if (productsRes.error) {
+        console.warn('Could not load products for sales join:', productsRes.error.message);
+      }
 
-      return (data || []).map(s => ({
-        sale_id: s.sale_id,
-        product_name: s.product_name,
-        category: s.category || '',
-        quantity: parseInt(s.quantity || 0, 10),
-        unit_price: parseFloat(s.unit_price || 0),
-        total_price: parseFloat(s.total_price || 0),
-        customer_phone: s.customer_phone || '',
-        date: s.date || '',
-      }));
+      const products = productsRes.data || [];
+      const productMap = {};
+      products.forEach(p => {
+        const pid = (p.id || '').toString().trim();
+        if (!pid) return;
+        productMap[pid] = p;
+        // Legacy compatibility: older rows may have only the digit-suffix of `prod_<ts>`
+        const digits = pid.replace(/\D/g, '');
+        if (digits && !productMap[digits]) {
+          productMap[digits] = p;
+        }
+      });
+
+      return (salesRes.data || []).map(s => {
+        const productIdStr = (s.product_id || '').toString().trim();
+        const product = productMap[productIdStr]
+          || productMap[productIdStr.replace(/\D/g, '')];
+
+        const quantity = parseInt(s.quantity || 0, 10);
+        const totalPrice = parseFloat(s.total_price || 0);
+        const unitPrice = quantity > 0
+          ? (product ? parseFloat(product.sell_price || 0) : totalPrice / quantity)
+          : 0;
+
+        return {
+          sale_id: s.sale_id || `sale_${s.id}`,
+          product_name: product ? product.name : (productIdStr || 'Unknown Product'),
+          category: product ? (product.category || '') : '',
+          quantity,
+          unit_price: unitPrice,
+          total_price: totalPrice,
+          customer_phone: s.customer_phone || '',
+          date: s.created_at || '',
+        };
+      });
     } catch (error) {
       console.warn('Error fetching sales history from Supabase, falling back to local storage:', error.message);
       return getLocalSalesFallback();
