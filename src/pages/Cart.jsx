@@ -21,12 +21,24 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
   const [checkingOut, setCheckingOut] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
+  const [discountType, setDiscountType] = useState('flat');
+  const [discountInput, setDiscountInput] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
   const receiptRef = useRef(null);
 
   const phoneRegex = /^01[3-9]\d{8}$/;
   const isPhoneValid = phoneRegex.test(customerPhone);
 
   const cartTotal = cart.reduce((acc, item) => acc + (parseFloat(item.sell_price) * item.quantity), 0);
+
+  // Discount calculation
+  const discountVal = parseFloat(discountInput) || 0;
+  const calculatedDiscount = discountType === 'percentage' 
+    ? (cartTotal * discountVal) / 100 
+    : discountVal;
+  
+  const finalDiscount = Math.min(cartTotal, Math.max(0, calculatedDiscount));
+  const grandTotal = Math.max(0, cartTotal - finalDiscount);
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
@@ -43,7 +55,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
       setCheckingOut(true);
       
       // Perform batch sales transaction and stock reduction
-      const res = await sellMultipleProducts(cart, customerPhone);
+      const res = await sellMultipleProducts(cart, customerPhone, finalDiscount, paymentMethod);
       
       // Celebrate!
       confetti({
@@ -58,7 +70,10 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
         invoice_no: `INV-${Date.now().toString().slice(-6)}`,
         date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
         items: [...cart],
-        total: cartTotal
+        subtotal: cartTotal,
+        discount: finalDiscount,
+        total: grandTotal,
+        payment_method: paymentMethod
       };
 
       setInvoice(newInvoice);
@@ -236,13 +251,79 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs text-beauty-taupe">
+                <span>Subtotal</span>
+                <span className="font-bold text-white">
+                  {formatCurrency(cartTotal)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-beauty-taupe">
                 <span>Currency</span>
                 <span className="font-bold text-white">BDT (৳)</span>
               </div>
+
+              {/* Discount Selector and Input */}
+              <div className="space-y-2 pt-3 border-t border-white/5">
+                <label className="block text-xs font-semibold text-beauty-taupe">
+                  Apply Discount
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <select
+                      value={discountType}
+                      onChange={(e) => {
+                        setDiscountType(e.target.value);
+                        setDiscountInput('');
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-beauty-cream focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs font-semibold cursor-pointer"
+                    >
+                      <option value="flat" className="bg-[#151030] text-white">Flat (৳)</option>
+                      <option value="percentage" className="bg-[#151030] text-white">Percent (%)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder={discountType === 'percentage' ? 'e.g. 10' : 'e.g. 150'}
+                      value={discountInput}
+                      onChange={(e) => setDiscountInput(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-beauty-cream focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Method Selector */}
+              <div className="space-y-2 pt-3 border-t border-white/5">
+                <label htmlFor="paymentMethod" className="block text-xs font-semibold text-beauty-taupe">
+                  Payment Method
+                </label>
+                <select
+                  id="paymentMethod"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-beauty-cream focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs font-semibold cursor-pointer"
+                >
+                  <option value="Cash" className="bg-[#151030] text-white">Cash</option>
+                  <option value="Card" className="bg-[#151030] text-white">Card</option>
+                  <option value="bKash" className="bg-[#151030] text-white">bKash</option>
+                  <option value="Nagad" className="bg-[#151030] text-white">Nagad</option>
+                  <option value="Rocket" className="bg-[#151030] text-white">Rocket</option>
+                  <option value="Bank" className="bg-[#151030] text-white">Bank</option>
+                </select>
+              </div>
+
+              {finalDiscount > 0 && (
+                <div className="flex justify-between items-center text-xs text-rose-500 font-semibold pt-2">
+                  <span>Discount Applied</span>
+                  <span>-{formatCurrency(finalDiscount)}</span>
+                </div>
+              )}
+
               <div className="border-t border-white/5 pt-4 flex justify-between items-center">
                 <span className="text-sm font-semibold text-white">Grand Total</span>
                 <span className="font-sans font-extrabold text-lg text-beauty-accent">
-                  {formatCurrency(cartTotal)}
+                  {formatCurrency(grandTotal)}
                 </span>
               </div>
             </div>
@@ -259,7 +340,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 maxLength={11}
-                className="w-full px-3 py-2 rounded-xl border border-white/10 bg-beauty-cream/10 text-white focus:outline-none focus:ring-1 focus:ring-beauty-accent focus:border-beauty-accent text-xs font-mono"
+                className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-beauty-cream focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs font-mono"
               />
               {customerPhone && !isPhoneValid && (
                 <p className="text-[10px] text-rose-500 font-semibold mt-1">
@@ -338,6 +419,10 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                     <span>Date:</span>
                     <span>{invoice.date}</span>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Payment Method:</span>
+                    <span style={{ fontWeight: 'bold' }}>{invoice.payment_method || 'Cash'}</span>
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8D7B70' }}>
                     <span>Currency:</span>
                     <span>BDT (৳)</span>
@@ -369,7 +454,20 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </div>
 
                 {/* Summary total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 'bold', paddingTop: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #EAD5C9', paddingBottom: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal:</span>
+                    <span>{formatCurrency(invoice.subtotal)}</span>
+                  </div>
+                  {invoice.discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                      <span>Discount:</span>
+                      <span>-{formatCurrency(invoice.discount)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 'bold', paddingTop: '4px' }}>
                   <span style={{ textTransform: 'uppercase' }}>Grand Total:</span>
                   <span style={{ color: '#915EFF', fontSize: '16px' }}>{formatCurrency(invoice.total)}</span>
                 </div>

@@ -173,8 +173,72 @@ const executeLocalAddProductDirect = (formattedProduct) => {
   return { created: 1, local: true };
 };
 
+// Helper to compute difference between old and new product fields
+const getProductDiff = (oldProd, newProd) => {
+  const changes = {};
+  const fields = ['name', 'category', 'buy_price', 'sell_price', 'stock', 'notes', 'image'];
+  fields.forEach(field => {
+    let oldVal = oldProd[field];
+    let newVal = newProd[field];
+    
+    // Normalize comparison for numbers vs strings
+    if (field === 'buy_price' || field === 'sell_price') {
+      oldVal = parseFloat(oldVal || 0).toFixed(2);
+      newVal = parseFloat(newVal || 0).toFixed(2);
+    } else if (field === 'stock') {
+      oldVal = parseInt(oldVal || 0, 10);
+      newVal = parseInt(newVal || 0, 10);
+    } else {
+      oldVal = (oldVal || '').toString().trim();
+      newVal = (newVal || '').toString().trim();
+    }
+    
+    if (oldVal !== newVal) {
+      changes[field] = { old: oldVal, new: newVal };
+    }
+  });
+  return changes;
+};
+
+// Helper to perform local product update and log edit
+const executeLocalUpdateProduct = (productId, updatedProduct) => {
+  const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+  const oldProduct = products.find(p => p.id === productId);
+  if (!oldProduct) return { success: false, error: 'Product not found' };
+
+  const diff = getProductDiff(oldProduct, updatedProduct);
+
+  const index = products.findIndex(p => p.id === productId);
+  if (index !== -1) {
+    products[index] = {
+      ...products[index],
+      ...updatedProduct,
+      buy_price: parseFloat(updatedProduct.buy_price || 0),
+      sell_price: parseFloat(updatedProduct.sell_price || 0),
+      stock: parseInt(updatedProduct.stock || 0, 10),
+    };
+    saveLocalData('uk_products', products);
+  }
+
+  // Only log if there are actual changes
+  if (Object.keys(diff).length > 0) {
+    const edits = getLocalData('uk_product_edits', []);
+    const editLog = {
+      id: `edit_${Date.now()}`,
+      product_id: productId,
+      product_name: updatedProduct.name,
+      changes: diff,
+      edited_at: new Date().toISOString()
+    };
+    edits.unshift(editLog);
+    saveLocalData('uk_product_edits', edits);
+  }
+
+  return { success: true, local: true };
+};
+
 // Helper to perform checkout / stock reduction locally
-const executeLocalCheckout = (cartItems, customerPhone) => {
+const executeLocalCheckout = (cartItems, customerPhone, discount = 0, paymentMethod = 'Cash') => {
   const products = getLocalData('uk_products', DUMMY_PRODUCTS);
   
   // Verify stock
@@ -228,14 +292,22 @@ const executeLocalCheckout = (cartItems, customerPhone) => {
   const dateStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
   const batchTimestamp = Date.now();
 
+  const totalCartVal = cartItems.reduce((sum, item) => sum + (parseFloat(item.sell_price) * item.quantity), 0);
+
   cartItems.forEach((item, index) => {
+    const itemSubtotal = parseFloat(item.sell_price) * item.quantity;
+    const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
+    const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
+
     const newSale = {
       sale_id: `sale_${batchTimestamp}_${index}`,
       product_name: item.name,
       category: item.category || '',
       quantity: item.quantity.toString(),
       unit_price: parseFloat(item.sell_price).toFixed(2),
-      total_price: (parseFloat(item.sell_price) * item.quantity).toFixed(2),
+      total_price: finalItemTotalPrice.toFixed(2),
+      discount: distributedDiscount.toFixed(2),
+      payment_method: paymentMethod || 'Cash',
       customer_phone: customerPhone || '',
       date: dateStr
     };
@@ -352,7 +424,7 @@ export const sellProduct = async (productId, quantityToSell) => {
 };
 
 // Sell multiple products at a time (Cart Checkout)
-export const sellMultipleProducts = async (cartItems, customerPhone) => {
+export const sellMultipleProducts = async (cartItems, customerPhone, discount = 0, paymentMethod = 'Cash') => {
   if (cartItems.length === 0) {
     throw new Error('No items in checkout list');
   }
@@ -413,31 +485,48 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
         });
       }
 
+      // Calculate total cart value to distribute discount proportionally
+      const totalCartVal = stockUpdates.reduce((sum, update) => sum + (update.unitPrice * update.qtySold), 0);
+
       // 2. Insert transaction records into Supabase customer_sales (canonical sales table)
       // product_id column is TEXT, so the original product id string is preserved.
-      const customerSalesRows = stockUpdates.map((update, index) => ({
-        product_id: (update.dbProductId || update.productId || '').toString(),
-        customer_phone: customerPhone || '',
-        quantity: update.qtySold,
-        total_price: Math.round(update.unitPrice * update.qtySold),
-        sale_id: `sale_${batchTimestamp}_${index}`
-      }));
+      const customerSalesRows = stockUpdates.map((update, index) => {
+        const itemSubtotal = update.unitPrice * update.qtySold;
+        const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
+        const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
+
+        return {
+          product_id: (update.dbProductId || update.productId || '').toString(),
+          customer_phone: customerPhone || '',
+          quantity: update.qtySold,
+          total_price: Math.round(finalItemTotalPrice),
+          discount: Math.round(distributedDiscount),
+          payment_method: paymentMethod || 'Cash',
+          sale_id: `sale_${batchTimestamp}_${index}`
+        };
+      });
 
       let { error: salesInsertErr } = await supabase
         .from('customer_sales')
         .insert(customerSalesRows);
 
-      // Backward-compatible retry: drop sale_id if the column hasn't been added yet
-      if (salesInsertErr && salesInsertErr.message && salesInsertErr.message.includes('sale_id')) {
-        console.warn('sale_id column not found in customer_sales schema. Retrying insertion without sale_id.');
-        const fallbackRows = customerSalesRows.map(row => {
-          const { sale_id, ...rest } = row;
-          return rest;
-        });
-        const { error: retryErr } = await supabase
-          .from('customer_sales')
-          .insert(fallbackRows);
-        salesInsertErr = retryErr;
+      // Backward-compatible retry: drop sale_id, discount, payment_method columns if they haven't been added yet
+      if (salesInsertErr && salesInsertErr.message) {
+        const hasSaleIdErr = salesInsertErr.message.includes('sale_id');
+        const hasDiscountErr = salesInsertErr.message.includes('discount');
+        const hasPayMethodErr = salesInsertErr.message.includes('payment_method');
+        
+        if (hasSaleIdErr || hasDiscountErr || hasPayMethodErr) {
+          console.warn('Newer columns not found in customer_sales schema. Retrying insertion with fallback schema.');
+          const fallbackRows = customerSalesRows.map(row => {
+            const { sale_id, discount, payment_method, ...rest } = row;
+            return rest;
+          });
+          const { error: retryErr } = await supabase
+            .from('customer_sales')
+            .insert(fallbackRows);
+          salesInsertErr = retryErr;
+        }
       }
 
       if (salesInsertErr) throw salesInsertErr;
@@ -458,21 +547,27 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
         })
       );
 
-      // 4. Best-effort backup logging into uk_sales (legacy table — schema may not include
-      // customer_phone, so we exclude it. Failures here are non-fatal because customer_sales
-      // is the authoritative source for the dashboard.)
+      // 4. Best-effort backup logging into uk_sales
       try {
         const dateStr = new Date().toISOString();
-        const salesRows = stockUpdates.map((update, index) => ({
-          sale_id: `sale_${batchTimestamp}_${index}`,
-          product_id: (update.dbProductId || update.productId || '').toString(),
-          product_name: update.name,
-          category: update.category,
-          quantity: update.qtySold,
-          unit_price: update.unitPrice,
-          total_price: update.unitPrice * update.qtySold,
-          date: dateStr
-        }));
+        const salesRows = stockUpdates.map((update, index) => {
+          const itemSubtotal = update.unitPrice * update.qtySold;
+          const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
+          const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
+
+          return {
+            sale_id: `sale_${batchTimestamp}_${index}`,
+            product_id: (update.dbProductId || update.productId || '').toString(),
+            product_name: update.name,
+            category: update.category,
+            quantity: update.qtySold,
+            unit_price: update.unitPrice,
+            total_price: finalItemTotalPrice,
+            discount: distributedDiscount,
+            payment_method: paymentMethod || 'Cash',
+            date: dateStr
+          };
+        });
         const { error: logErr } = await supabase.from('uk_sales').insert(salesRows);
         if (logErr) console.warn('Backup uk_sales logging skipped:', logErr.message);
       } catch (logErr) {
@@ -482,11 +577,79 @@ export const sellMultipleProducts = async (cartItems, customerPhone) => {
       return { success: true };
     } catch (error) {
       console.error('Error executing batch sales in Supabase, falling back locally:', error.message);
-      return executeLocalCheckout(cartItems, customerPhone);
+      return executeLocalCheckout(cartItems, customerPhone, discount, paymentMethod);
     }
   } else {
     await new Promise(resolve => setTimeout(resolve, 300));
-    return executeLocalCheckout(cartItems, customerPhone);
+    return executeLocalCheckout(cartItems, customerPhone, discount, paymentMethod);
+  }
+};
+
+// Update an existing product and log its edit details
+export const updateProduct = async (productId, productData) => {
+  const defaultImage = '/logo.png';
+  const imgUrl = (productData.image && productData.image.trim() !== '') 
+    ? productData.image.trim() 
+    : defaultImage;
+
+  const formattedProduct = {
+    name: productData.name,
+    category: productData.category || '',
+    buy_price: Math.round(parseFloat(productData.buy_price || 0)),
+    sell_price: Math.round(parseFloat(productData.sell_price || 0)),
+    stock: parseInt(productData.stock || 0, 10),
+    image: imgUrl,
+    notes: productData.notes || '',
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      // 1. Fetch current product state to calculate diff
+      const { data: currentProduct, error: fetchErr } = await supabase
+        .from('uk_products')
+        .select('*')
+        .eq('id', productId)
+        .single();
+      
+      let diff = {};
+      if (!fetchErr && currentProduct) {
+        diff = getProductDiff(currentProduct, formattedProduct);
+      }
+
+      // 2. Update the product in uk_products
+      const { error: updateErr } = await supabase
+        .from('uk_products')
+        .update(formattedProduct)
+        .eq('id', productId);
+
+      if (updateErr) throw updateErr;
+
+      // 3. Insert diff into uk_product_edits if any changes were made
+      if (Object.keys(diff).length > 0) {
+        const { error: editLogErr } = await supabase
+          .from('uk_product_edits')
+          .insert([{
+            product_id: productId,
+            product_name: formattedProduct.name,
+            changes: diff
+          }]);
+
+        if (editLogErr) {
+          console.warn('Could not log edit to Supabase uk_product_edits:', editLogErr.message);
+        }
+      }
+
+      // Also sync locally
+      executeLocalUpdateProduct(productId, formattedProduct);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating product in Supabase, falling back locally:', error.message);
+      return executeLocalUpdateProduct(productId, formattedProduct);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalUpdateProduct(productId, formattedProduct);
   }
 };
 
