@@ -147,7 +147,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Serial no</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Category</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Brand</th>
-                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Product Name</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap min-w-[220px]">Product Name</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">model / barcode</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">ml/mg</th>
                   <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Stock</th>
@@ -180,7 +180,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Serial no</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Category</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">Brand</th>
-                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Product Name</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap min-w-[220px]">Product Name</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">model / barcode</th>
                   <th className="py-4 px-6 font-semibold whitespace-nowrap">ml/mg</th>
                   <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Stock</th>
@@ -213,7 +213,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                       </td>
 
                       {/* Product Name */}
-                      <td className="py-3 px-6 max-w-[220px]">
+                      <td className="py-3 px-6 min-w-[220px] whitespace-normal">
                         <div className="flex items-center gap-2.5">
                           <img 
                             src={product.image || '/logo.png'} 
@@ -224,7 +224,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                               e.target.src = '/logo.png';
                             }}
                           />
-                          <div className="font-semibold text-white truncate">{product.name}</div>
+                          <div className="font-semibold text-white break-words whitespace-normal leading-tight">{product.name}</div>
                         </div>
                       </td>
 

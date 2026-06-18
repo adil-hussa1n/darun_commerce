@@ -310,7 +310,7 @@ export default function AddProduct() {
                     <th className="py-3 px-5 font-semibold whitespace-nowrap">Serial no</th>
                     <th className="py-3 px-5 font-semibold whitespace-nowrap">Category</th>
                     <th className="py-3 px-5 font-semibold whitespace-nowrap">Brand</th>
-                    <th className="py-3 px-5 font-semibold whitespace-nowrap">Product Name</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap min-w-[220px]">Product Name</th>
                     <th className="py-3 px-5 font-semibold whitespace-nowrap">model / barcode</th>
                     <th className="py-3 px-5 font-semibold whitespace-nowrap">ml/mg</th>
                     <th className="py-3 px-5 font-semibold text-right whitespace-nowrap">Buy ৳</th>
@@ -328,7 +328,7 @@ export default function AddProduct() {
                         <td className="py-3 px-5 font-mono text-[10px] text-beauty-taupe">{product.serial_no || '—'}</td>
                         <td className="py-3 px-5 text-beauty-taupe">{product.category || '—'}</td>
                         <td className="py-3 px-5 text-beauty-taupe">{product.brand || '—'}</td>
-                        <td className="py-3 px-5 max-w-[200px]">
+                        <td className="py-3 px-5 min-w-[220px] whitespace-normal">
                           <div className="flex items-center gap-2.5">
                             <img
                               src={product.image || '/logo.png'}
@@ -339,7 +339,7 @@ export default function AddProduct() {
                                 e.target.src = '/logo.png';
                               }}
                             />
-                            <div className="font-semibold text-white truncate">{product.name}</div>
+                            <div className="font-semibold text-white break-words whitespace-normal leading-tight">{product.name}</div>
                           </div>
                         </td>
                         <td className="py-3 px-5 text-beauty-taupe font-mono text-[10px]">{product.model_barcode || '—'}</td>
