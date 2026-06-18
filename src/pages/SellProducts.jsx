@@ -65,7 +65,10 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
     return (
       (product.name || '').toLowerCase().includes(query) ||
       (product.category || '').toLowerCase().includes(query) ||
-      (product.notes || '').toLowerCase().includes(query) ||
+      (product.brand || '').toLowerCase().includes(query) ||
+      (product.serial_no || '').toLowerCase().includes(query) ||
+      (product.model_barcode || '').toLowerCase().includes(query) ||
+      (product.ml_mg || '').toLowerCase().includes(query) ||
       (product.id || '').toLowerCase().includes(query)
     );
   });
@@ -79,7 +82,7 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
 
   // BDT formatter helper
   const formatCurrency = (val) => {
-    return `৳ ${parseFloat(val).toFixed(2)}`;
+    return `৳\u00a0${parseFloat(val).toFixed(2)}`;
   };
 
   const totalItemsInCart = cart.reduce((acc, i) => acc + i.quantity, 0);
@@ -141,11 +144,15 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
-                  <th className="py-4 px-6 font-semibold">Image</th>
-                  <th className="py-4 px-6 font-semibold">Name</th>
-                  <th className="py-4 px-6 font-semibold">Stock Status</th>
-                  <th className="py-4 px-6 font-semibold text-right">Sell Price</th>
-                  <th className="py-4 px-6 font-semibold text-center">Actions</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Serial no</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Category</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Brand</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Product Name</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">model / barcode</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">ml/mg</th>
+                  <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Stock</th>
+                  <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Sell Price</th>
+                  <th className="py-4 px-6 font-semibold text-center whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -169,13 +176,16 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-white/5 bg-beauty-rose shadow-md">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
-                  <th className="py-4 px-6 font-semibold">Image</th>
-                  <th className="py-4 px-6 font-semibold">Name</th>
-                  <th className="py-4 px-6 font-semibold">Stock Status</th>
-                  <th className="py-4 px-6 font-semibold text-right">Sell Price</th>
-                  <th className="py-4 px-6 font-semibold text-center">Actions</th>
+              <thead>                <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Serial no</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Category</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Brand</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">Product Name</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">model / barcode</th>
+                  <th className="py-4 px-6 font-semibold whitespace-nowrap">ml/mg</th>
+                  <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Stock</th>
+                  <th className="py-4 px-6 font-semibold text-right whitespace-nowrap">Sell Price</th>
+                  <th className="py-4 px-6 font-semibold text-center whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-xs text-white/90">
@@ -187,26 +197,49 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                   
                   return (
                     <tr key={product.id} className="hover:bg-beauty-blush/30 transition-colors">
-                      {/* Thumbnail */}
-                      <td className="py-3 px-6 shrink-0">
-                        <img 
-                          src={product.image} 
-                          alt={product.name} 
-                          className="w-12 h-12 object-cover rounded-lg border border-white/10 bg-beauty-cream shrink-0"
-                          onError={(e) => {
-                            e.target.onerror = null; 
-                            e.target.src = '/logo.png';
-                          }}
-                        />
+                      {/* Serial no */}
+                      <td className="py-3 px-6 font-mono text-[10px] text-beauty-taupe">
+                        {product.serial_no || '—'}
                       </td>
                       
-                      {/* Name */}
-                      <td className="py-3 px-6 font-semibold text-white max-w-[280px] truncate">
-                        {product.name}
+                      {/* Category */}
+                      <td className="py-3 px-6 text-beauty-taupe">
+                        {product.category || '—'}
+                      </td>
+
+                      {/* Brand */}
+                      <td className="py-3 px-6 text-beauty-taupe">
+                        {product.brand || '—'}
+                      </td>
+
+                      {/* Product Name */}
+                      <td className="py-3 px-6 max-w-[220px]">
+                        <div className="flex items-center gap-2.5">
+                          <img 
+                            src={product.image || '/logo.png'} 
+                            alt={product.name} 
+                            className="w-8 h-8 object-cover rounded-lg border border-white/10 bg-beauty-cream shrink-0"
+                            onError={(e) => {
+                              e.target.onerror = null; 
+                              e.target.src = '/logo.png';
+                            }}
+                          />
+                          <div className="font-semibold text-white truncate">{product.name}</div>
+                        </div>
+                      </td>
+
+                      {/* Model / barcode */}
+                      <td className="py-3 px-6 text-beauty-taupe font-mono text-[10px]">
+                        {product.model_barcode || '—'}
+                      </td>
+
+                      {/* ml/mg */}
+                      <td className="py-3 px-6 text-beauty-taupe">
+                        {product.ml_mg || '—'}
                       </td>
                       
                       {/* Stock status */}
-                      <td className="py-3 px-6">
+                      <td className="py-3 px-6 text-right">
                         {isOutOfStock ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20">
                             Out of Stock
@@ -217,13 +250,13 @@ export default function SellProducts({ cart = [], addToCart, updateCartQty }) {
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            {product.stock} Available
+                            {product.stock}
                           </span>
                         )}
                       </td>
                       
                       {/* Sell Price */}
-                      <td className="py-3 px-6 text-right font-bold text-white">
+                      <td className="py-3 px-6 text-right font-bold text-white whitespace-nowrap">
                         {formatCurrency(product.sell_price)}
                       </td>
                       

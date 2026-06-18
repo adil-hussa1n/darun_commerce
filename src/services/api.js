@@ -24,68 +24,80 @@ export const supabase = isSupabaseConfigured()
 const DUMMY_PRODUCTS = [
   {
     id: 'prod_1',
-    name: 'Rosewater Hydrating Mist',
+    serial_no: 'SN-001',
     category: 'Skin Care',
+    brand: 'The Ordinary',
+    name: 'Rosewater Hydrating Mist',
+    model_barcode: 'BAR-001',
+    ml_mg: '100ml',
     buy_price: '8.00',
     sell_price: '180.00',
     stock: '12',
-    image: 'https://images.unsplash.com/photo-1608248597481-496100c80836?auto=format&fit=crop&q=80&w=400',
-    notes: 'Refreshing facial mist infused with pure rosewater and hyaluronic acid to instantly hydrate and soothe.',
     created_at: '2026-05-20 10:00:00'
   },
   {
     id: 'prod_2',
-    name: 'Glow Vitamin C Serum',
+    serial_no: 'SN-002',
     category: 'Skin Care',
+    brand: 'Cerave',
+    name: 'Glow Vitamin C Serum',
+    model_barcode: 'BAR-002',
+    ml_mg: '30ml',
     buy_price: '12.00',
     sell_price: '280.00',
     stock: '3',
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=400',
-    notes: 'Radiance-boosting serum containing 15% Vitamin C, Vitamin E, and Ferulic Acid to brighten dark spots.',
     created_at: '2026-05-21 11:30:00'
   },
   {
     id: 'prod_3',
-    name: 'Argan Oil Hair Mask',
+    serial_no: 'SN-003',
     category: 'Hair Care',
+    brand: 'Argan Oil Co.',
+    name: 'Argan Oil Hair Mask',
+    model_barcode: 'BAR-003',
+    ml_mg: '200ml',
     buy_price: '9.50',
     sell_price: '220.00',
     stock: '8',
-    image: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?auto=format&fit=crop&q=80&w=400',
-    notes: 'Deep conditioning hair mask with pure Moroccan Argan Oil to restore moisture, shine, and elasticity.',
     created_at: '2026-05-22 09:15:00'
   },
   {
     id: 'prod_4',
-    name: 'Coconut & Shea Body Butter',
+    serial_no: 'SN-004',
     category: 'Body Care',
+    brand: 'Shea Moisture',
+    name: 'Coconut & Shea Body Butter',
+    model_barcode: 'BAR-004',
+    ml_mg: '250ml',
     buy_price: '6.00',
     sell_price: '150.00',
     stock: '4',
-    image: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&q=80&w=400',
-    notes: 'Ultra-rich body butter whipped with organic coconut oil and shea butter for 24-hour intense nourishment.',
     created_at: '2026-05-23 14:20:00'
   },
   {
     id: 'prod_5',
-    name: 'Gentle Oatmeal Cleanser',
+    serial_no: 'SN-005',
     category: 'Skin Care',
+    brand: 'Cetaphil',
+    name: 'Gentle Oatmeal Cleanser',
+    model_barcode: 'BAR-005',
+    ml_mg: '150ml',
     buy_price: '5.50',
     sell_price: '140.00',
     stock: '15',
-    image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=400',
-    notes: 'Calming, non-foaming daily cleanser formulated with colloidal oatmeal to cleanse sensitive skin without stripping.',
     created_at: '2026-05-24 08:45:00'
   },
   {
     id: 'prod_6',
-    name: 'Tea Tree Purifying Shampoo',
+    serial_no: 'SN-006',
     category: 'Hair Care',
+    brand: 'Tea Tree Special',
+    name: 'Tea Tree Purifying Shampoo',
+    model_barcode: 'BAR-006',
+    ml_mg: '400ml',
     buy_price: '7.00',
     sell_price: '165.50',
     stock: '2',
-    image: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&q=80&w=400',
-    notes: 'Clarifying shampoo infused with tea tree oil and peppermint to invigorate the scalp and reduce flakiness.',
     created_at: '2026-05-25 12:00:00'
   }
 ];
@@ -150,6 +162,7 @@ const getLocalProductsFallback = () => {
       buy_price: parseFloat(p.buy_price || 0),
       sell_price: parseFloat(p.sell_price || 0),
       stock: parseInt(p.stock || 0, 10),
+      image: '/logo.png'
     };
   });
 };
@@ -176,7 +189,7 @@ const executeLocalAddProductDirect = (formattedProduct) => {
 // Helper to compute difference between old and new product fields
 const getProductDiff = (oldProd, newProd) => {
   const changes = {};
-  const fields = ['name', 'category', 'buy_price', 'sell_price', 'stock', 'notes', 'image'];
+  const fields = ['name', 'category', 'buy_price', 'sell_price', 'stock', 'serial_no', 'brand', 'model_barcode', 'ml_mg'];
   fields.forEach(field => {
     let oldVal = oldProd[field];
     let newVal = newProd[field];
@@ -303,6 +316,10 @@ const executeLocalCheckout = (cartItems, customerPhone, discount = 0, paymentMet
       sale_id: `sale_${batchTimestamp}_${index}`,
       product_name: item.name,
       category: item.category || '',
+      brand: item.brand || '',
+      serial_no: item.serial_no || '',
+      model_barcode: item.model_barcode || '',
+      ml_mg: item.ml_mg || '',
       quantity: item.quantity.toString(),
       unit_price: parseFloat(item.sell_price).toFixed(2),
       total_price: finalItemTotalPrice.toFixed(2),
@@ -357,12 +374,15 @@ export const getProducts = async () => {
           id: finalId,
           name: pName || 'Untitled Product',
           category: p.category || '',
+          brand: p.brand || '',
+          serial_no: p.serial_no || '',
+          model_barcode: p.model_barcode || '',
+          ml_mg: p.ml_mg || '',
           buy_price: parseFloat(p.buy_price || 0),
           sell_price: parseFloat(p.sell_price || 0),
           stock: parseInt(p.stock || 0, 10),
-          image: p.image || '',
-          notes: p.notes || '',
           created_at: p.created_at || '',
+          image: '/logo.png'
         };
       });
     } catch (error) {
@@ -377,20 +397,18 @@ export const getProducts = async () => {
 
 // Add a single product
 export const addProduct = async (productData) => {
-  const defaultImage = '/logo.png';
-  const imgUrl = (productData.image && productData.image.trim() !== '') 
-    ? productData.image.trim() 
-    : defaultImage;
-
   const formattedProduct = {
     id: `prod_${Date.now()}`,
-    name: productData.name,
+    serial_no: productData.serial_no || '',
     category: productData.category || '',
+    brand: productData.brand || '',
+    name: productData.name,
+    model_barcode: productData.model_barcode || '',
+    ml_mg: productData.ml_mg || '',
     buy_price: Math.round(parseFloat(productData.buy_price || 0)),
     sell_price: Math.round(parseFloat(productData.sell_price || 0)),
     stock: parseInt(productData.stock || 0, 10),
-    image: imgUrl,
-    notes: productData.notes || '',
+    image: '/logo.png',
     created_at: new Date().toISOString()
   };
 
@@ -480,6 +498,10 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
           newStock: currentStock - item.quantity,
           name: product.name,
           category: product.category || '',
+          brand: product.brand || '',
+          serial_no: product.serial_no || '',
+          model_barcode: product.model_barcode || '',
+          ml_mg: product.ml_mg || '',
           unitPrice: parseFloat(product.sell_price || 0),
           qtySold: item.quantity
         });
@@ -502,7 +524,11 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
           total_price: Math.round(finalItemTotalPrice),
           discount: Math.round(distributedDiscount),
           payment_method: paymentMethod || 'Cash',
-          sale_id: `sale_${batchTimestamp}_${index}`
+          sale_id: `sale_${batchTimestamp}_${index}`,
+          brand: update.brand || '',
+          serial_no: update.serial_no || '',
+          model_barcode: update.model_barcode || '',
+          ml_mg: update.ml_mg || ''
         };
       });
 
@@ -565,7 +591,11 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
             total_price: finalItemTotalPrice,
             discount: distributedDiscount,
             payment_method: paymentMethod || 'Cash',
-            date: dateStr
+            date: dateStr,
+            brand: update.brand || '',
+            serial_no: update.serial_no || '',
+            model_barcode: update.model_barcode || '',
+            ml_mg: update.ml_mg || ''
           };
         });
         const { error: logErr } = await supabase.from('uk_sales').insert(salesRows);
@@ -587,19 +617,17 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
 
 // Update an existing product and log its edit details
 export const updateProduct = async (productId, productData) => {
-  const defaultImage = '/logo.png';
-  const imgUrl = (productData.image && productData.image.trim() !== '') 
-    ? productData.image.trim() 
-    : defaultImage;
-
   const formattedProduct = {
-    name: productData.name,
+    serial_no: productData.serial_no || '',
     category: productData.category || '',
+    brand: productData.brand || '',
+    name: productData.name,
+    model_barcode: productData.model_barcode || '',
+    ml_mg: productData.ml_mg || '',
     buy_price: Math.round(parseFloat(productData.buy_price || 0)),
     sell_price: Math.round(parseFloat(productData.sell_price || 0)),
     stock: parseInt(productData.stock || 0, 10),
-    image: imgUrl,
-    notes: productData.notes || '',
+    image: '/logo.png'
   };
 
   if (isSupabaseConfigured()) {

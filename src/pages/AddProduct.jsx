@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { 
-  Image as ImageIcon, 
-  ArrowLeft, 
-  Save, 
+import {
+  Image as ImageIcon,
+  ArrowLeft,
+  Save,
   Loader2,
   Search,
   X,
@@ -26,39 +26,60 @@ export default function AddProduct() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
+  const getNextSerialNo = (productsList) => {
+    let maxVal = 0;
+    productsList.forEach(p => {
+      if (p.serial_no) {
+        const matches = p.serial_no.match(/\d+/g);
+        if (matches) {
+          const num = parseInt(matches.join(''), 10);
+          if (!isNaN(num) && num > maxVal) {
+            maxVal = num;
+          }
+        }
+      }
+    });
+    return (maxVal + 1).toString();
+  };
+
   const [form, setForm] = useState({
-    name: '',
     category: '',
-    buy_price: '',
-    sell_price: '',
+    brand: '',
+    name: '',
+    model_barcode: '',
+    ml_mg: '',
     stock: '',
-    image: '',
-    notes: ''
+    buy_price: '',
+    sell_price: ''
   });
 
   // Editing state variables
   const [editingProduct, setEditingProduct] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: '',
+    serial_no: '',
     category: '',
-    buy_price: '',
-    sell_price: '',
+    brand: '',
+    name: '',
+    model_barcode: '',
+    ml_mg: '',
     stock: '',
-    image: '',
-    notes: ''
+    buy_price: '',
+    sell_price: ''
   });
 
   const handleStartEdit = (product) => {
     setEditingProduct(product);
     setEditForm({
-      name: product.name || '',
+      serial_no: product.serial_no || '',
       category: product.category || '',
+      brand: product.brand || '',
+      name: product.name || '',
+      model_barcode: product.model_barcode || '',
+      ml_mg: product.ml_mg || '',
       buy_price: product.buy_price !== undefined ? product.buy_price.toString() : '',
       sell_price: product.sell_price !== undefined ? product.sell_price.toString() : '',
-      stock: product.stock !== undefined ? product.stock.toString() : '',
-      image: product.image || '',
-      notes: product.notes || ''
+      stock: product.stock !== undefined ? product.stock.toString() : ''
     });
   };
 
@@ -76,7 +97,7 @@ export default function AddProduct() {
       toast.error('Category is required');
       return false;
     }
-    
+
     const buyNum = parseFloat(editForm.buy_price);
     const sellNum = parseFloat(editForm.sell_price);
     const stockNum = parseInt(editForm.stock, 10);
@@ -109,7 +130,7 @@ export default function AddProduct() {
       await updateProduct(editingProduct.id, editForm);
       toast.success('Product updated successfully!');
       setEditingProduct(null);
-      
+
       // Reload products list
       const data = await getProducts();
       setProducts(data);
@@ -150,7 +171,7 @@ export default function AddProduct() {
       toast.error('Category is required');
       return false;
     }
-    
+
     const buyNum = parseFloat(form.buy_price);
     const sellNum = parseFloat(form.sell_price);
     const stockNum = parseInt(form.stock, 10);
@@ -180,8 +201,13 @@ export default function AddProduct() {
 
     try {
       setSubmitting(true);
-      await addProduct(form);
-      toast.success('Product added successfully!');
+      const nextSerial = getNextSerialNo(products);
+      const productPayload = {
+        ...form,
+        serial_no: nextSerial
+      };
+      await addProduct(productPayload);
+      toast.success(`Product added successfully with Serial No: ${nextSerial}!`);
       navigate('/');
     } catch (err) {
       toast.error('Failed to save product. Check configuration.');
@@ -193,8 +219,8 @@ export default function AddProduct() {
 
   const formatCurrency = (val) => {
     const num = parseFloat(val);
-    if (isNaN(num)) return '৳ 0.00';
-    return `৳ ${num.toFixed(2)}`;
+    if (isNaN(num)) return '৳\u00a00.00';
+    return `৳\u00a0${num.toFixed(2)}`;
   };
 
   // Reset to page 1 when search changes
@@ -221,10 +247,10 @@ export default function AddProduct() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      
+
       {/* Header */}
       <div className="space-y-2">
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-xs font-semibold text-beauty-taupe hover:text-white transition-colors cursor-pointer"
         >
@@ -281,13 +307,16 @@ export default function AddProduct() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="text-[10px] font-bold uppercase tracking-wider text-beauty-taupe border-b border-white/5">
-                    <th className="py-3 px-5 font-semibold">Image</th>
-                    <th className="py-3 px-5 font-semibold">Name</th>
-                    <th className="py-3 px-5 font-semibold">Category</th>
-                    <th className="py-3 px-5 font-semibold text-right">Buy ৳</th>
-                    <th className="py-3 px-5 font-semibold text-right">Sell ৳</th>
-                    <th className="py-3 px-5 font-semibold text-right">Stock</th>
-                    <th className="py-3 px-5 font-semibold text-center">Actions</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">Serial no</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">Category</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">Brand</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">Product Name</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">model / barcode</th>
+                    <th className="py-3 px-5 font-semibold whitespace-nowrap">ml/mg</th>
+                    <th className="py-3 px-5 font-semibold text-right whitespace-nowrap">Buy ৳</th>
+                    <th className="py-3 px-5 font-semibold text-right whitespace-nowrap">Sell ৳</th>
+                    <th className="py-3 px-5 font-semibold text-right whitespace-nowrap">Stock</th>
+                    <th className="py-3 px-5 font-semibold text-center whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-xs text-white/90">
@@ -296,24 +325,32 @@ export default function AddProduct() {
                     const isOut = product.stock <= 0;
                     return (
                       <tr key={product.id} className="hover:bg-beauty-blush/30 transition-colors">
-                        <td className="py-3 px-5 shrink-0">
-                          <img
-                            src={product.image || DEFAULT_IMAGE_PREVIEW}
-                            alt={product.name}
-                            className="w-10 h-10 object-contain rounded-lg border border-white/10 bg-beauty-cream"
-                            onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMAGE_PREVIEW; }}
-                          />
-                        </td>
-                        <td className="py-3 px-5 font-semibold text-white max-w-[200px] truncate">{product.name}</td>
+                        <td className="py-3 px-5 font-mono text-[10px] text-beauty-taupe">{product.serial_no || '—'}</td>
                         <td className="py-3 px-5 text-beauty-taupe">{product.category || '—'}</td>
-                        <td className="py-3 px-5 text-right text-beauty-taupe">{formatCurrency(product.buy_price)}</td>
-                        <td className="py-3 px-5 text-right font-bold text-white">{formatCurrency(product.sell_price)}</td>
+                        <td className="py-3 px-5 text-beauty-taupe">{product.brand || '—'}</td>
+                        <td className="py-3 px-5 max-w-[200px]">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={product.image || '/logo.png'}
+                              alt={product.name}
+                              className="w-8 h-8 object-cover rounded-lg border border-white/10 bg-beauty-cream shrink-0"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '/logo.png';
+                              }}
+                            />
+                            <div className="font-semibold text-white truncate">{product.name}</div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-5 text-beauty-taupe font-mono text-[10px]">{product.model_barcode || '—'}</td>
+                        <td className="py-3 px-5 text-beauty-taupe">{product.ml_mg || '—'}</td>
+                        <td className="py-3 px-5 text-right text-beauty-taupe whitespace-nowrap">{formatCurrency(product.buy_price)}</td>
+                        <td className="py-3 px-5 text-right font-bold text-white whitespace-nowrap">{formatCurrency(product.sell_price)}</td>
                         <td className="py-3 px-5 text-right">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            isOut ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
-                            isLow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/25' :
-                            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isOut ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                              isLow ? 'bg-amber-400/10 text-amber-400 border border-amber-400/25' :
+                                'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}>
                             {product.stock}
                           </span>
                         </td>
@@ -336,10 +373,10 @@ export default function AddProduct() {
             {/* Pagination Controls */}
             <div className="px-6 py-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="text-xs text-beauty-taupe">
-                Page <span className="font-bold text-white">{currentPage}</span> of <span className="font-bold text-white">{totalPages}</span> 
+                Page <span className="font-bold text-white">{currentPage}</span> of <span className="font-bold text-white">{totalPages}</span>
                 <span className="text-beauty-taupe/60 ml-2">({filteredProducts.length} total)</span>
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
@@ -350,7 +387,7 @@ export default function AddProduct() {
                   <ChevronLeft className="w-4 h-4" />
                   <span className="hidden sm:inline">Previous</span>
                 </button>
-                
+
                 <button
                   onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
@@ -373,9 +410,9 @@ export default function AddProduct() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
-        
+
         {/* Form (3/5 width) */}
-        <form 
+        <form
           onSubmit={handleSubmit}
           className="lg:col-span-3 bg-beauty-rose p-6 md:p-8 rounded-2xl border border-white/5 shadow-md space-y-6"
         >
@@ -388,7 +425,7 @@ export default function AddProduct() {
               name="name"
               value={form.name}
               onChange={handleChange}
-              placeholder="e.g. Vitamin C Radiance Serum"
+              placeholder="e.g. Rosewater Hydrating Mist"
               className="beauty-input"
               required
             />
@@ -416,6 +453,52 @@ export default function AddProduct() {
               </datalist>
             </div>
 
+            {/* Field: Brand */}
+            <div>
+              <label htmlFor="brand" className="beauty-label">Brand</label>
+              <input
+                type="text"
+                id="brand"
+                name="brand"
+                value={form.brand}
+                onChange={handleChange}
+                placeholder="e.g. The Ordinary"
+                className="beauty-input"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Field: model / barcode */}
+            <div>
+              <label htmlFor="model_barcode" className="beauty-label">model / barcode</label>
+              <input
+                type="text"
+                id="model_barcode"
+                name="model_barcode"
+                value={form.model_barcode}
+                onChange={handleChange}
+                placeholder="e.g. BAR-829"
+                className="beauty-input"
+              />
+            </div>
+
+            {/* Field: ml/mg */}
+            <div>
+              <label htmlFor="ml_mg" className="beauty-label">ml/mg</label>
+              <input
+                type="text"
+                id="ml_mg"
+                name="ml_mg"
+                value={form.ml_mg}
+                onChange={handleChange}
+                placeholder="e.g. 100ml / 50mg"
+                className="beauty-input"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* Field: Stock Quantity */}
             <div>
               <label htmlFor="stock" className="beauty-label">Initial Stock *</label>
@@ -432,12 +515,10 @@ export default function AddProduct() {
                 required
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Field: Buy Price */}
             <div>
-              <label htmlFor="buy_price" className="beauty-label">Buy Price (BDT ৳) *</label>
+              <label htmlFor="buy_price" className="beauty-label">Buy Price *</label>
               <input
                 type="number"
                 id="buy_price"
@@ -470,38 +551,6 @@ export default function AddProduct() {
             </div>
           </div>
 
-          {/* Field: Product Image URL */}
-          <div>
-            <label htmlFor="image" className="beauty-label opacity-50 cursor-not-allowed">Product Image URL</label>
-            <input
-              type="url"
-              id="image"
-              name="image"
-              value={form.image}
-              onChange={handleChange}
-              placeholder="https://images.unsplash.com/..."
-              className="beauty-input opacity-50 cursor-not-allowed"
-              disabled
-            />
-            <p className="text-[10px] text-beauty-taupe mt-1 opacity-50">
-              This field is currently disabled.
-            </p>
-          </div>
-
-          {/* Field: Notes/Description */}
-          <div>
-            <label htmlFor="notes" className="beauty-label">Notes &amp; Description</label>
-            <textarea
-              id="notes"
-              name="notes"
-              value={form.notes}
-              onChange={handleChange}
-              placeholder="Formulation details, size (e.g. 50ml), ingredients or skin type usage instructions..."
-              rows="3"
-              className="beauty-input resize-none"
-            />
-          </div>
-
           {/* Submit Button */}
           <button
             type="submit"
@@ -527,28 +576,37 @@ export default function AddProduct() {
           <h3 className="text-xs font-bold text-beauty-taupe tracking-wider uppercase pl-1">
             Live Preview
           </h3>
-          
+
           <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md overflow-hidden flex flex-col group transition-all duration-300 hover:shadow-lg hover:border-white/10">
-            {/* Image Preview Window */}
-            <div className="h-64 bg-beauty-cream/30 relative overflow-hidden flex items-center justify-center border-b border-white/5 p-4">
+            {/* Specs Preview Window */}
+            <div className="h-64 bg-beauty-cream/30 relative overflow-hidden flex flex-col justify-between border-b border-white/5 p-6 space-y-4">
+              {/* Cover background image */}
               <img 
-                src={form.image || DEFAULT_IMAGE_PREVIEW} 
-                alt="Product Preview" 
-                className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105 drop-shadow-lg"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = DEFAULT_IMAGE_PREVIEW;
-                }}
+                src="/logo.png" 
+                alt="preview" 
+                className="absolute inset-0 w-full h-full object-contain opacity-35 pointer-events-none p-6"
               />
-              <div className="absolute top-3 right-3 bg-[#151030] text-[#915EFF] border border-[#915EFF]/20 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs">
-                {form.category || 'No Category'}
-              </div>
-              
-              {!form.image && (
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-1.5 pointer-events-none">
-                  <span className="text-[10px] font-medium text-beauty-taupe/60 bg-beauty-cream/60 px-2 py-0.5 rounded-full">Default Logo</span>
+              {/* Dark overlay gradient for high text contrast */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/50 z-0" />
+              <div className="flex justify-between items-start relative z-10">
+                <span className="text-[10px] uppercase tracking-wider text-white/90 font-extrabold shadow-sm">Specs Preview</span>
+                <div className="flex gap-1.5 flex-wrap">
+                  <span className="bg-[#151030] text-[#915EFF] border border-[#915EFF]/20 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs">
+                    {form.category || 'No Category'}
+                  </span>
+                  {form.brand && (
+                    <span className="bg-beauty-accent/10 text-white border border-white/10 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-xs">
+                      {form.brand}
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-xs text-beauty-taupe/65">Serial no: <span className="font-mono font-bold text-white ml-1">{getNextSerialNo(products)} <span className="text-[10px] text-beauty-accent font-semibold">(Auto)</span></span></div>
+                <div className="text-xs text-beauty-taupe/65">Model / Barcode: <span className="font-mono font-bold text-white ml-1">{form.model_barcode || '—'}</span></div>
+                <div className="text-xs text-beauty-taupe/65">ml/mg: <span className="font-bold text-white ml-1">{form.ml_mg || '—'}</span></div>
+              </div>
             </div>
 
             {/* Product Meta */}
@@ -557,9 +615,6 @@ export default function AddProduct() {
                 <h4 className="font-sans font-bold text-lg text-white leading-tight truncate">
                   {form.name || 'Untitled Product'}
                 </h4>
-                <p className="text-xs text-beauty-taupe mt-1 h-8 line-clamp-2 overflow-hidden italic leading-relaxed">
-                  {form.notes || 'No description provided yet.'}
-                </p>
               </div>
 
               {/* Specs Grid */}
@@ -655,6 +710,58 @@ export default function AddProduct() {
                 </div>
 
                 <div>
+                  <label htmlFor="edit_brand" className="beauty-label">Brand</label>
+                  <input
+                    type="text"
+                    id="edit_brand"
+                    name="brand"
+                    value={editForm.brand}
+                    onChange={handleEditChange}
+                    className="beauty-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="edit_serial_no" className="beauty-label">Serial no (Read-only)</label>
+                  <input
+                    type="text"
+                    id="edit_serial_no"
+                    name="serial_no"
+                    value={editForm.serial_no}
+                    readOnly
+                    className="beauty-input opacity-50 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="edit_model_barcode" className="beauty-label">model / barcode</label>
+                  <input
+                    type="text"
+                    id="edit_model_barcode"
+                    name="model_barcode"
+                    value={editForm.model_barcode}
+                    onChange={handleEditChange}
+                    className="beauty-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="edit_ml_mg" className="beauty-label">ml/mg</label>
+                  <input
+                    type="text"
+                    id="edit_ml_mg"
+                    name="ml_mg"
+                    value={editForm.ml_mg}
+                    onChange={handleEditChange}
+                    className="beauty-input"
+                  />
+                </div>
+
+                <div>
                   <label htmlFor="edit_stock" className="beauty-label">Stock Quantity *</label>
                   <input
                     type="number"
@@ -700,30 +807,6 @@ export default function AddProduct() {
                     required
                   />
                 </div>
-              </div>
-
-              <div>
-                <label htmlFor="edit_image" className="beauty-label">Product Image URL</label>
-                <input
-                  type="text"
-                  id="edit_image"
-                  name="image"
-                  value={editForm.image}
-                  onChange={handleEditChange}
-                  className="beauty-input"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="edit_notes" className="beauty-label">Notes &amp; Description</label>
-                <textarea
-                  id="edit_notes"
-                  name="notes"
-                  value={editForm.notes}
-                  onChange={handleEditChange}
-                  rows="3"
-                  className="beauty-input resize-none"
-                />
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-white/5">

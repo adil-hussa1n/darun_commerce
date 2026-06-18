@@ -131,7 +131,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
   };
 
   const formatCurrency = (val) => {
-    return `৳ ${parseFloat(val).toFixed(2)}`;
+    return `৳\u00a0${parseFloat(val).toFixed(2)}`;
   };
 
   return (
@@ -181,7 +181,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
               {cart.map(item => (
                 <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-beauty-blush/20 transition-all">
                   <img 
-                    src={item.image} 
+                    src={item.image || '/logo.png'} 
                     alt={item.name} 
                     className="w-16 h-16 object-cover rounded-lg border border-white/10 bg-beauty-cream shrink-0"
                     onError={(e) => {
@@ -191,7 +191,26 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                   />
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-bold text-white truncate">{item.name}</h4>
-                    <span className="text-xs font-bold text-beauty-accent mt-1.5 block">{formatCurrency(item.sell_price)}</span>
+                    <div className="flex flex-wrap gap-2 mt-2 text-[10px]">
+                      <span className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-beauty-taupe">
+                        Category: <strong className="text-white font-semibold">{item.category || '—'}</strong>
+                      </span>
+                      <span className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-beauty-taupe">
+                        Brand: <strong className="text-white font-semibold">{item.brand || '—'}</strong>
+                      </span>
+                      <span className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-beauty-taupe">
+                        Model: <strong className="text-white font-semibold">{item.model_barcode || '—'}</strong>
+                      </span>
+                      <span className="bg-white/5 border border-white/10 px-2 py-0.5 rounded text-beauty-taupe">
+                        Vol: <strong className="text-white font-semibold">{item.ml_mg || '—'}</strong>
+                      </span>
+                      {item.serial_no && (
+                        <span className="bg-beauty-accent/10 border border-beauty-accent/25 px-2 py-0.5 rounded text-beauty-accent font-mono">
+                          SN: <strong className="text-white font-bold">{item.serial_no}</strong>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-beauty-accent mt-3 block">{formatCurrency(item.sell_price)}</span>
                   </div>
                   
                   {/* Quantity adjustments */}
@@ -435,12 +454,21 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                     <span>Item Description</span>
                     <span style={{ textAlign: 'right' }}>Total</span>
                   </div>
-                  
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {invoice.items.map((item, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
                         <div style={{ maxWidth: '200px' }}>
                           <span style={{ display: 'block', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                          {(item.brand || item.ml_mg) && (
+                            <span style={{ display: 'block', fontSize: '8px', color: '#8D7B70', margin: '1px 0' }}>
+                              {[item.brand, item.ml_mg].filter(Boolean).join(' • ')}
+                            </span>
+                          )}
+                          {(item.serial_no || item.model_barcode) && (
+                            <span style={{ display: 'block', fontSize: '7.5px', color: '#8D7B70', opacity: 0.8, fontFamily: 'monospace', margin: '1px 0' }}>
+                              {[item.serial_no ? `SN: ${item.serial_no}` : null, item.model_barcode ? `BC: ${item.model_barcode}` : null].filter(Boolean).join(' | ')}
+                            </span>
+                          )}
                           <span style={{ fontSize: '9px', color: '#8D7B70' }}>
                             {formatCurrency(item.sell_price)} x {item.quantity}
                           </span>

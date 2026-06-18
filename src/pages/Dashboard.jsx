@@ -96,7 +96,7 @@ export default function Dashboard() {
 
   // Format currencies
   const formatCurrency = (val) => {
-    return `৳ ${parseFloat(val).toFixed(2)}`;
+    return `৳\u00a0${parseFloat(val).toFixed(2)}`;
   };
 
   return (
@@ -265,21 +265,27 @@ export default function Dashboard() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe">
-                      <th className="pb-3 pr-4 font-semibold">Mobile Number</th>
+                      <th className="pb-3 pr-4 font-semibold">Date/Time</th>
+                      <th className="pb-3 px-4 font-semibold">Mobile Number</th>
                       <th className="pb-3 px-4 font-semibold">Product</th>
                       <th className="pb-3 px-4 font-semibold">Category</th>
                       <th className="pb-3 px-4 font-semibold text-right">Qty</th>
                       <th className="pb-3 px-4 font-semibold text-right">Price</th>
+                      <th className="pb-3 px-4 font-semibold text-right">Discount</th>
+                      <th className="pb-3 px-4 font-semibold text-center">Payment</th>
                       <th className="pb-3 pl-4 font-semibold text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/90">
                     {sales.slice(0, 10).map((sale, idx) => (
                       <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
-                        <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe">
+                        <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
+                          {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-[10px] text-beauty-taupe">
                           {sale.customer_phone || '—'}
                         </td>
-                        <td className="py-3.5 px-4 font-medium max-w-[240px] truncate">
+                        <td className="py-3.5 px-4 font-medium max-w-[200px] truncate">
                           {sale.product_name}
                         </td>
                         <td className="py-3.5 px-4">
@@ -296,6 +302,14 @@ export default function Dashboard() {
                         </td>
                         <td className="py-3.5 px-4 text-right text-beauty-taupe">
                           {formatCurrency(sale.unit_price)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-rose-500 font-medium">
+                          {parseFloat(sale.discount) > 0 ? `-${formatCurrency(sale.discount)}` : '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-beauty-cream/50 text-white rounded">
+                            {sale.payment_method || 'Cash'}
+                          </span>
                         </td>
                         <td className="py-3.5 pl-4 text-right font-semibold text-white">
                           {formatCurrency(sale.total_price)}
