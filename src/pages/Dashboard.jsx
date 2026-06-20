@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { 
+import {
   Banknote,
-  Package, 
-  TrendingUp, 
-  Plus, 
+  Package,
+  TrendingUp,
+  Plus,
   ArrowRight,
   ShoppingBag,
   RefreshCw,
@@ -12,7 +12,9 @@ import {
   Wallet,
   Receipt,
   Coins,
-  Info
+  Info,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { getProducts, getSalesHistory, getExpenses, syncOfflineData, getUnsyncedCount } from '../services/api';
 import { DashboardSkeleton } from '../components/Skeleton';
@@ -33,15 +35,32 @@ export default function Dashboard() {
   // Unsynced state
   const [unsyncedCount, setUnsyncedCount] = useState(0);
 
+  // Hidden/Reveal profit states
+  const [showProfit, setShowProfit] = useState(false);
+  const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+
+  // 30 seconds auto-hide timer
+  useEffect(() => {
+    let timer;
+    if (showProfit) {
+      timer = setTimeout(() => {
+        setShowProfit(false);
+      }, 30000);
+    }
+    return () => clearTimeout(timer);
+  }, [showProfit]);
+
   // Date range checking helper
   const isDateWithinRange = (dateString, range) => {
     if (range === 'All Time') return true;
     if (!dateString) return false;
-    
+
     const date = new Date(dateString);
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     switch (range) {
       case 'Today':
         return date >= startOfToday;
@@ -98,7 +117,7 @@ export default function Dashboard() {
       setProducts(prodList);
       setSales(salesList);
       setExpenses(expensesList);
-      
+
       // Update unsynced count
       setUnsyncedCount(getUnsyncedCount());
 
@@ -150,22 +169,22 @@ export default function Dashboard() {
   // Filtered Sales
   const filteredSales = sales.filter(sale => {
     const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = !q || 
+    const matchesSearch = !q ||
       (sale.product_name || '').toLowerCase().includes(q) ||
       (sale.customer_phone || '').toLowerCase().includes(q);
-      
-    const matchesPayment = paymentFilter === 'All' || 
+
+    const matchesPayment = paymentFilter === 'All' ||
       (sale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase();
-      
+
     const matchesDate = isDateWithinRange(sale.date, dateRangeFilter);
-    
+
     return matchesSearch && matchesPayment && matchesDate;
   });
 
   // Filtered Expenses
   const filteredExpenses = expenses.filter(exp => {
     const matchesDate = isDateWithinRange(exp.created_at, dateRangeFilter);
-    const matchesPayment = paymentFilter === 'All' || 
+    const matchesPayment = paymentFilter === 'All' ||
       (exp.transaction_type || '').toLowerCase() === paymentFilter.toLowerCase();
     return matchesDate && matchesPayment;
   });
@@ -206,7 +225,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      
+
       {/* Top Greeting Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-beauty-rose via-beauty-blush to-beauty-rose border border-white/5 shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-beauty-accent/15 rounded-full blur-3xl pointer-events-none" />
@@ -247,7 +266,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
           <div className="flex flex-col sm:flex-row gap-2">
             {/* Create Sale button */}
-            <Link 
+            <Link
               to="/sell-products"
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-rose border border-white/10 hover:bg-beauty-blush text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs"
             >
@@ -255,7 +274,7 @@ export default function Dashboard() {
               Create Sale
             </Link>
             {/* Product Management button */}
-            <Link 
+            <Link
               to="/add-product"
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-beauty-accent hover:bg-beauty-accent/90 text-white rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs hover:shadow-md"
             >
@@ -321,7 +340,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        
+
         {/* KPI: Total Sales */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
           <div className="space-y-1">
@@ -332,7 +351,7 @@ export default function Dashboard() {
               {formatCurrency(totalRevenue)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
-              Data from 26 May 2026.
+              Started from 20 June 2026.
             </span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
@@ -361,17 +380,59 @@ export default function Dashboard() {
         {/* KPI: Net Profit */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
-              Net Profit
-            </span>
-            <h3 className={`text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {formatCurrency(netProfit)}
-            </h3>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
+                Net Profit
+              </span>
+              <button 
+                type="button"
+                onClick={() => {
+                  if (showProfit) {
+                    setShowProfit(false);
+                  } else {
+                    setPasswordPromptOpen(true);
+                    setPasswordInput('');
+                    setPasswordError(false);
+                  }
+                }}
+                className="text-beauty-taupe/60 hover:text-white transition-colors cursor-pointer"
+                title={showProfit ? "Hide Net Profit" : "Unlock Net Profit"}
+              >
+                {showProfit ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            
+            {showProfit ? (
+              <h3 className={`text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} animate-fade-in`}>
+                {formatCurrency(netProfit)}
+              </h3>
+            ) : (
+              <div 
+                onClick={() => {
+                  setPasswordPromptOpen(true);
+                  setPasswordInput('');
+                  setPasswordError(false);
+                }}
+                className="cursor-pointer group flex items-center gap-1.5"
+                title="Click to reveal"
+              >
+                <h3 className="text-2xl font-bold tracking-tight text-white/40 group-hover:text-white/60 transition-colors">
+                  ••••••
+                </h3>
+                <span className="text-[8px] px-1.5 py-0.5 rounded-md bg-beauty-cream/40 text-beauty-taupe font-bold uppercase tracking-wider group-hover:bg-beauty-cream group-hover:text-white transition-all">
+                  Locked
+                </span>
+              </div>
+            )}
+            
             <span className="text-[10px] text-beauty-taupe/80 block">
-              Gross profit - expenses
+              {showProfit ? "Gross profit - expenses" : "Click dots or eye to unlock"}
             </span>
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+            !showProfit ? 'bg-beauty-cream/10 text-beauty-taupe/40' :
+            netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+          }`}>
             <TrendingUp className="w-6 h-6" />
           </div>
         </div>
@@ -416,7 +477,7 @@ export default function Dashboard() {
 
       {/* Main Grid: Transactions (Full Width) */}
       <div className="grid grid-cols-1 gap-8">
-        
+
         {/* Recent Purchasing History */}
         <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md p-6 flex flex-col justify-between">
           <div>
@@ -426,8 +487,8 @@ export default function Dashboard() {
                   Recent Purchasing History
                 </h3>
               </div>
-              <Link 
-                to="/sell-products" 
+              <Link
+                to="/sell-products"
                 className="text-xs font-semibold text-beauty-accent hover:text-white flex items-center gap-1 group transition-colors"
               >
                 Create Sale
@@ -516,6 +577,78 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* Password Prompt Modal for revealing Net Profit */}
+      {passwordPromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-sm p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-beauty-clay via-beauty-rose to-beauty-clay shadow-2xl space-y-4 animate-scale-up">
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-white">Enter Password</h3>
+              <p className="text-xs text-beauty-taupe/80">
+                Please enter the password to view the Net Profit dashboard card.
+              </p>
+            </div>
+            
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (passwordInput === 'UKSB2026') {
+                  setShowProfit(true);
+                  setPasswordPromptOpen(false);
+                  setPasswordError(false);
+                  setPasswordInput('');
+                  toast.success('Net Profit revealed for 30 seconds');
+                } else {
+                  setPasswordError(true);
+                  toast.error('Incorrect password');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    if (passwordError) setPasswordError(false);
+                  }}
+                  className={`w-full px-4 py-2 rounded-xl border bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs ${
+                    passwordError ? 'border-rose-500 ring-1 ring-rose-500/20' : 'border-white/10'
+                  }`}
+                  autoFocus
+                />
+                {passwordError && (
+                  <span className="text-[10px] text-rose-400 font-medium">
+                    Incorrect password. Please try again.
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasswordPromptOpen(false);
+                    setPasswordInput('');
+                    setPasswordError(false);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-white/10 bg-beauty-cream/30 hover:bg-beauty-cream/50 text-white font-semibold text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-beauty-accent to-purple-600 hover:from-purple-500 hover:to-beauty-accent text-white font-bold text-xs tracking-wider transition-all duration-300 shadow-md cursor-pointer"
+                >
+                  Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
