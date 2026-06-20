@@ -123,7 +123,17 @@ export default function Dashboard() {
     const interval = setInterval(() => {
       loadDashboardData(false, true);
     }, 12000);
-    return () => clearInterval(interval);
+
+    const handleOnline = () => {
+      loadDashboardData(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   if (loading) {

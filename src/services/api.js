@@ -6,8 +6,11 @@ const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env ?
 
 // Check if Supabase project is configured in .env
 export const isSupabaseConfigured = () => {
+  if (typeof window !== 'undefined' && window.navigator && window.navigator.onLine === false) {
+    return false;
+  }
   return (typeof supabaseUrl === 'string' && supabaseUrl.trim() !== '') &&
-    (typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() !== '');
+         (typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() !== '');
 };
 
 // Maintain compatibility with Layout.jsx which uses isApiConfigured
