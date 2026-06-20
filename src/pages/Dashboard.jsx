@@ -209,7 +209,7 @@ export default function Dashboard() {
       
       {/* Top Greeting Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-beauty-rose via-beauty-blush to-beauty-rose border border-white/5 shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-beauty-accent/15 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-beauty-accent/15 rounded-full blur-3xl pointer-events-none" />
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-base md:text-lg font-bold text-white tracking-wide leading-relaxed">
             Thank You For Choosing Darun, Wishing you a productive business day ahead.

@@ -7,7 +7,8 @@ import {
   Menu, 
   X, 
   Store,
-  Coins
+  Coins,
+  Users
 } from 'lucide-react';
 
 export default function Layout({ children, cart = [] }) {
@@ -18,6 +19,7 @@ export default function Layout({ children, cart = [] }) {
     { to: '/add-product', name: 'Product Management', icon: PlusCircle },
     { to: '/sell-products', name: 'Create Sale', icon: ShoppingBag },
     { to: '/expenses', name: 'Expenses', icon: Coins },
+    { to: '/parties', name: 'Party Management', icon: Users },
   ];
 
   const handleLinkClick = () => {

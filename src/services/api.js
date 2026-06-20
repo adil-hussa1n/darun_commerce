@@ -140,6 +140,10 @@ const saveLocalData = (key, data) => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
+const generateNumericId = () => {
+  return Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 1000);
+};
+
 // Helper to retrieve local product listings as a fallback
 const getLocalProductsFallback = () => {
   const products = getLocalData('uk_products', DUMMY_PRODUCTS);
@@ -766,13 +770,43 @@ export const getExpenses = async () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map(exp => ({
+      
+      const dbExpenses = (data || []).map(exp => ({
         id: exp.id.toString(),
         name: exp.name || '',
         amount: parseFloat(exp.amount || 0),
         transaction_type: exp.transaction_type || 'Cash',
         created_at: exp.created_at || ''
       }));
+
+      const localExpenses = getLocalData('uk_expenses', []);
+      const unsyncedAdditions = localExpenses.filter(e => e.synced === false);
+      const unsyncedUpdates = getLocalData('unsynced_expense_updates', []);
+
+      let merged = [...dbExpenses];
+
+      // Apply updates
+      merged = merged.map(e => {
+        const update = unsyncedUpdates.find(u => u.expenseId.toString() === e.id.toString());
+        if (update) {
+          return { ...e, ...update.formattedExpense };
+        }
+        return e;
+      });
+
+      // Filter out deleted
+      const deletedIds = new Set(getLocalData('deleted_expense_ids', []));
+      merged = merged.filter(e => !deletedIds.has(e.id.toString()));
+
+      // Add additions
+      const dbIds = new Set(dbExpenses.map(e => e.id.toString()));
+      unsyncedAdditions.forEach(e => {
+        if (!dbIds.has(e.id.toString())) {
+          merged.unshift(e);
+        }
+      });
+
+      return merged;
     } catch (error) {
       console.warn('Error fetching expenses from Supabase, falling back to local storage:', error.message);
       return getLocalExpensesFallback();
@@ -851,22 +885,31 @@ export const deleteExpense = async (expenseId) => {
         if (secondErr) throw error;
       }
 
-      executeLocalDeleteExpense(expenseId);
+      executeLocalDeleteExpense(expenseId, false); // NOT offline/local only
       return { success: true };
     } catch (error) {
       console.warn('Error deleting expense from Supabase, falling back locally:', error.message);
-      return executeLocalDeleteExpense(expenseId);
+      return executeLocalDeleteExpense(expenseId, true); // IS offline/local fallback
     }
   } else {
     await new Promise(resolve => setTimeout(resolve, 300));
-    return executeLocalDeleteExpense(expenseId);
+    return executeLocalDeleteExpense(expenseId, true);
   }
 };
 
-const executeLocalDeleteExpense = (expenseId) => {
+const executeLocalDeleteExpense = (expenseId, isOffline = false) => {
   const localExpenses = getLocalData('uk_expenses', []);
-  const filtered = localExpenses.filter(exp => exp.id.toString() !== expenseId.toString());
+  const filtered = localExpenses.filter(exp => (exp.id || '').toString() !== (expenseId || '').toString());
   saveLocalData('uk_expenses', filtered);
+
+  if (isOffline) {
+    const deletedExpenses = getLocalData('deleted_expense_ids', []);
+    if (!deletedExpenses.includes(expenseId.toString())) {
+      deletedExpenses.push(expenseId.toString());
+      saveLocalData('deleted_expense_ids', deletedExpenses);
+    }
+  }
+
   return { success: true, local: true };
 };
 
@@ -1116,6 +1159,131 @@ export const syncOfflineData = async () => {
     }
     saveLocalData('unsynced_expense_updates', remainingExpUpdates);
 
+    // 6. Sync New Parties (synced: false)
+    const localParties = getLocalData('uk_parties', []);
+    const unsyncedParties = localParties.filter(p => p.synced === false);
+    for (const party of unsyncedParties) {
+      const { synced, ...supabaseParty } = party;
+      supabaseParty.id = parseInt(supabaseParty.id, 10);
+      const { error } = await supabase
+        .from('uk_parties')
+        .insert([supabaseParty]);
+
+      if (!error) {
+        party.synced = true;
+        syncCount++;
+      }
+    }
+    if (unsyncedParties.length > 0) {
+      saveLocalData('uk_parties', localParties);
+    }
+
+    // 7. Sync Party Updates
+    const unsyncedPartyUpdates = getLocalData('unsynced_party_updates', []);
+    const remainingPartyUpdates = [];
+    for (const update of unsyncedPartyUpdates) {
+      const { error } = await supabase
+        .from('uk_parties')
+        .update(update.formattedParty)
+        .eq('id', parseInt(update.partyId, 10));
+
+      if (!error) {
+        syncCount++;
+      } else {
+        remainingPartyUpdates.push(update);
+      }
+    }
+    saveLocalData('unsynced_party_updates', remainingPartyUpdates);
+
+    // 8. Sync New Party Transactions (synced: false)
+    const localPartyTxs = getLocalData('uk_party_transactions', []);
+    const unsyncedPartyTxs = localPartyTxs.filter(t => t.synced === false);
+    for (const tx of unsyncedPartyTxs) {
+      const { synced, ...supabaseTx } = tx;
+      supabaseTx.id = parseInt(supabaseTx.id, 10);
+      supabaseTx.party_id = parseInt(supabaseTx.party_id, 10);
+      supabaseTx.amount = parseFloat(supabaseTx.amount);
+      const { error } = await supabase
+        .from('uk_party_transactions')
+        .insert([supabaseTx]);
+
+      if (!error) {
+        tx.synced = true;
+        syncCount++;
+      }
+    }
+    if (unsyncedPartyTxs.length > 0) {
+      saveLocalData('uk_party_transactions', localPartyTxs);
+    }
+
+    // 9. Sync Party Transaction Updates
+    const unsyncedPartyTxUpdates = getLocalData('unsynced_party_transaction_updates', []);
+    const remainingPartyTxUpdates = [];
+    for (const update of unsyncedPartyTxUpdates) {
+      const { error } = await supabase
+        .from('uk_party_transactions')
+        .update(update.formattedTx)
+        .eq('id', parseInt(update.txId, 10));
+
+      if (!error) {
+        syncCount++;
+      } else {
+        remainingPartyTxUpdates.push(update);
+      }
+    }
+    saveLocalData('unsynced_party_transaction_updates', remainingPartyTxUpdates);
+
+    // 10. Sync Deleted Parties
+    const deletedParties = getLocalData('deleted_party_ids', []);
+    const remainingDeletedParties = [];
+    for (const id of deletedParties) {
+      if (/^\d+$/.test(id)) {
+        // Delete transactions of this party first to prevent foreign key errors during sync!
+        await supabase
+          .from('uk_party_transactions')
+          .delete()
+          .eq('party_id', parseInt(id, 10));
+
+        const { error } = await supabase
+          .from('uk_parties')
+          .delete()
+          .eq('id', parseInt(id, 10));
+        if (!error) syncCount++;
+        else remainingDeletedParties.push(id);
+      }
+    }
+    saveLocalData('deleted_party_ids', remainingDeletedParties);
+
+    // 11. Sync Deleted Party Transactions
+    const deletedTxs = getLocalData('deleted_party_transaction_ids', []);
+    const remainingDeletedTxs = [];
+    for (const id of deletedTxs) {
+      if (/^\d+$/.test(id)) {
+        const { error } = await supabase
+          .from('uk_party_transactions')
+          .delete()
+          .eq('id', parseInt(id, 10));
+        if (!error) syncCount++;
+        else remainingDeletedTxs.push(id);
+      }
+    }
+    saveLocalData('deleted_party_transaction_ids', remainingDeletedTxs);
+
+    // 12. Sync Deleted Expenses
+    const deletedExpenses = getLocalData('deleted_expense_ids', []);
+    const remainingDeletedExpenses = [];
+    for (const id of deletedExpenses) {
+      if (/^\d+$/.test(id)) {
+        const { error } = await supabase
+          .from('uk_expenses')
+          .delete()
+          .eq('id', parseInt(id, 10));
+        if (!error) syncCount++;
+        else remainingDeletedExpenses.push(id);
+      }
+    }
+    saveLocalData('deleted_expense_ids', remainingDeletedExpenses);
+
     return { success: true, syncedCount: syncCount };
   } catch (err) {
     console.error('Error syncing offline data:', err.message);
@@ -1131,9 +1299,474 @@ export const getUnsyncedCount = () => {
   const expenses = getLocalData('uk_expenses', []);
   const unsyncedExpensesCount = expenses.filter(e => e.synced === false).length;
 
+  const parties = getLocalData('uk_parties', []);
+  const unsyncedPartiesCount = parties.filter(p => p.synced === false).length;
+
+  const partyTxs = getLocalData('uk_party_transactions', []);
+  const unsyncedPartyTxsCount = partyTxs.filter(t => t.synced === false).length;
+
   const unsyncedUpdatesCount = getLocalData('unsynced_product_updates', []).length;
   const unsyncedCheckoutsCount = getLocalData('unsynced_checkouts', []).length;
   const unsyncedExpenseUpdatesCount = getLocalData('unsynced_expense_updates', []).length;
+  const unsyncedPartyUpdatesCount = getLocalData('unsynced_party_updates', []).length;
+  const unsyncedPartyTxUpdatesCount = getLocalData('unsynced_party_transaction_updates', []).length;
 
-  return unsyncedProductsCount + unsyncedExpensesCount + unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount;
+  const unsyncedDeletedPartiesCount = getLocalData('deleted_party_ids', []).length;
+  const unsyncedDeletedTxsCount = getLocalData('deleted_party_transaction_ids', []).length;
+  const unsyncedDeletedExpensesCount = getLocalData('deleted_expense_ids', []).length;
+
+  return unsyncedProductsCount + unsyncedExpensesCount + unsyncedPartiesCount + unsyncedPartyTxsCount +
+         unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount +
+         unsyncedPartyUpdatesCount + unsyncedPartyTxUpdatesCount +
+         unsyncedDeletedPartiesCount + unsyncedDeletedTxsCount + unsyncedDeletedExpensesCount;
+};
+
+/**
+ * ----------------------------------------------------
+ * PARTIES OPERATIONS
+ * ----------------------------------------------------
+ */
+
+// Fetch all parties
+export const getParties = async () => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_parties')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const dbParties = (data || []).map(p => ({
+        id: p.id.toString(),
+        name: p.name || '',
+        phone: p.phone || '',
+        address: p.address || '',
+        created_at: p.created_at || ''
+      }));
+
+      const localParties = getLocalData('uk_parties', []);
+      const unsyncedAdditions = localParties.filter(p => p.synced === false);
+      const unsyncedUpdates = getLocalData('unsynced_party_updates', []);
+
+      let merged = [...dbParties];
+
+      // Apply updates
+      merged = merged.map(p => {
+        const update = unsyncedUpdates.find(u => u.partyId.toString() === p.id.toString());
+        if (update) {
+          return { ...p, ...update.formattedParty };
+        }
+        return p;
+      });
+
+      // Filter out deleted
+      const deletedIds = new Set(getLocalData('deleted_party_ids', []));
+      merged = merged.filter(p => !deletedIds.has(p.id.toString()));
+
+      // Add additions
+      const dbIds = new Set(dbParties.map(p => p.id.toString()));
+      unsyncedAdditions.forEach(p => {
+        if (!dbIds.has(p.id.toString())) {
+          merged.unshift(p);
+        }
+      });
+
+      return merged;
+    } catch (error) {
+      console.warn('Error fetching parties from Supabase, falling back locally:', error.message);
+      return getLocalPartiesFallback();
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalPartiesFallback();
+  }
+};
+
+const getLocalPartiesFallback = () => {
+  return getLocalData('uk_parties', []);
+};
+
+// Add a party
+export const addParty = async (partyData) => {
+  const numericId = generateNumericId();
+  const formattedParty = {
+    id: numericId,
+    name: partyData.name,
+    phone: partyData.phone || '',
+    address: partyData.address || '',
+    created_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('uk_parties')
+        .insert([formattedParty]);
+
+      if (error) throw error;
+
+      // sync local
+      const localParties = getLocalData('uk_parties', []);
+      localParties.unshift(formattedParty);
+      saveLocalData('uk_parties', localParties);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error adding party to Supabase, falling back locally:', error.message);
+      return executeLocalAddParty(formattedParty);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalAddParty(formattedParty);
+  }
+};
+
+const executeLocalAddParty = (formattedParty) => {
+  const localParties = getLocalData('uk_parties', []);
+  localParties.unshift({ ...formattedParty, synced: false });
+  saveLocalData('uk_parties', localParties);
+  return { success: true, local: true };
+};
+
+// Update a party
+export const updateParty = async (partyId, partyData) => {
+  const formattedParty = {
+    name: partyData.name,
+    phone: partyData.phone || '',
+    address: partyData.address || ''
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('uk_parties')
+        .update(formattedParty)
+        .eq('id', parseInt(partyId, 10));
+
+      if (error) throw error;
+
+      executeLocalUpdateParty(partyId, formattedParty);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating party in Supabase, falling back locally:', error.message);
+      return executeLocalUpdateParty(partyId, formattedParty);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalUpdateParty(partyId, formattedParty);
+  }
+};
+
+const queueLocalPartyUpdate = (partyId, formattedParty) => {
+  const idStr = partyId.toString();
+  if (/^\d+$/.test(idStr)) {
+    const updates = getLocalData('unsynced_party_updates', []);
+    const filtered = updates.filter(u => u.partyId.toString() !== idStr);
+    filtered.push({ partyId, formattedParty });
+    saveLocalData('unsynced_party_updates', filtered);
+  } else {
+    const localParties = getLocalData('uk_parties', []);
+    const idx = localParties.findIndex(p => p.id.toString() === idStr);
+    if (idx !== -1) {
+      localParties[idx].synced = false;
+      saveLocalData('uk_parties', localParties);
+    }
+  }
+};
+
+const executeLocalUpdateParty = (partyId, formattedParty) => {
+  const localParties = getLocalData('uk_parties', []);
+  const index = localParties.findIndex(p => p.id.toString() === partyId.toString());
+  if (index !== -1) {
+    localParties[index] = {
+      ...localParties[index],
+      ...formattedParty
+    };
+    saveLocalData('uk_parties', localParties);
+  }
+
+  queueLocalPartyUpdate(partyId, formattedParty);
+  return { success: true, local: true };
+};
+
+// Delete a party
+export const deleteParty = async (partyId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      // First, delete the transactions associated with the party to avoid foreign key violations!
+      const { error: txError } = await supabase
+        .from('uk_party_transactions')
+        .delete()
+        .eq('party_id', parseInt(partyId, 10));
+
+      if (txError) throw txError;
+
+      const { error } = await supabase
+        .from('uk_parties')
+        .delete()
+        .eq('id', parseInt(partyId, 10));
+
+      if (error) throw error;
+
+      executeLocalDeleteParty(partyId, false); // NOT offline/local only
+      return { success: true };
+    } catch (error) {
+      console.warn('Error deleting party from Supabase, falling back locally:', error.message);
+      return executeLocalDeleteParty(partyId, true); // IS offline/local fallback
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalDeleteParty(partyId, true);
+  }
+};
+
+const executeLocalDeleteParty = (partyId, isOffline = false) => {
+  const localParties = getLocalData('uk_parties', []);
+  const filteredParties = localParties.filter(p => (p.id || '').toString() !== (partyId || '').toString());
+  saveLocalData('uk_parties', filteredParties);
+
+  const localTxs = getLocalData('uk_party_transactions', []);
+  const partyTxs = localTxs.filter(t => (t.party_id || '').toString() === (partyId || '').toString());
+  const filteredTxs = localTxs.filter(t => (t.party_id || '').toString() !== (partyId || '').toString());
+  saveLocalData('uk_party_transactions', filteredTxs);
+
+  if (isOffline) {
+    // Queue party deletion
+    const deletedPartyIds = getLocalData('deleted_party_ids', []);
+    if (!deletedPartyIds.includes(partyId.toString())) {
+      deletedPartyIds.push(partyId.toString());
+      saveLocalData('deleted_party_ids', deletedPartyIds);
+    }
+
+    // Queue transaction deletions for this party's transactions so they are also synced if offline
+    const deletedTxIds = getLocalData('deleted_party_transaction_ids', []);
+    let changedTxs = false;
+    partyTxs.forEach(tx => {
+      const txIdStr = tx.id.toString();
+      if (!deletedTxIds.includes(txIdStr)) {
+        deletedTxIds.push(txIdStr);
+        changedTxs = true;
+      }
+    });
+    if (changedTxs) {
+      saveLocalData('deleted_party_transaction_ids', deletedTxIds);
+    }
+  }
+
+  return { success: true, local: true };
+};
+
+/**
+ * ----------------------------------------------------
+ * PARTY TRANSACTIONS OPERATIONS
+ * ----------------------------------------------------
+ */
+
+// Fetch transactions for a specific party
+export const getPartyTransactions = async (partyId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_party_transactions')
+        .select('*')
+        .eq('party_id', parseInt(partyId, 10))
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const dbTxs = (data || []).map(t => ({
+        id: t.id.toString(),
+        party_id: t.party_id.toString(),
+        amount: parseFloat(t.amount || 0),
+        type: t.type || 'Due',
+        description: t.description || '',
+        created_at: t.created_at || ''
+      }));
+
+      const localTxs = getLocalData('uk_party_transactions', []);
+      const unsyncedAdditions = localTxs.filter(t => t.synced === false && t.party_id.toString() === partyId.toString());
+      const unsyncedUpdates = getLocalData('unsynced_party_transaction_updates', []);
+
+      let merged = [...dbTxs];
+
+      // Apply updates
+      merged = merged.map(t => {
+        const update = unsyncedUpdates.find(u => u.txId.toString() === t.id.toString());
+        if (update) {
+          return { ...t, ...update.formattedTx };
+        }
+        return t;
+      });
+
+      // Filter out deleted
+      const deletedIds = new Set(getLocalData('deleted_party_transaction_ids', []));
+      merged = merged.filter(t => !deletedIds.has(t.id.toString()));
+
+      // Add additions
+      const dbIds = new Set(dbTxs.map(t => t.id.toString()));
+      unsyncedAdditions.forEach(t => {
+        if (!dbIds.has(t.id.toString())) {
+          merged.unshift(t);
+        }
+      });
+
+      return merged;
+    } catch (error) {
+      console.warn('Error fetching party transactions from Supabase, falling back locally:', error.message);
+      return getLocalPartyTransactionsFallback(partyId);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalPartyTransactionsFallback(partyId);
+  }
+};
+
+const getLocalPartyTransactionsFallback = (partyId) => {
+  const txs = getLocalData('uk_party_transactions', []);
+  return txs.filter(t => t.party_id.toString() === partyId.toString());
+};
+
+// Add a party transaction
+export const addPartyTransaction = async (txData) => {
+  const numericId = generateNumericId();
+  const formattedTx = {
+    id: numericId,
+    party_id: parseInt(txData.party_id, 10),
+    amount: parseFloat(parseFloat(txData.amount || 0).toFixed(2)),
+    type: txData.type || 'Due',
+    description: txData.description || '',
+    created_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('uk_party_transactions')
+        .insert([formattedTx]);
+
+      if (error) throw error;
+
+      // sync local
+      const localTxs = getLocalData('uk_party_transactions', []);
+      localTxs.unshift(formattedTx);
+      saveLocalData('uk_party_transactions', localTxs);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error adding party transaction to Supabase, falling back locally:', error.message);
+      return executeLocalAddPartyTx(formattedTx);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalAddPartyTx(formattedTx);
+  }
+};
+
+const executeLocalAddPartyTx = (formattedTx) => {
+  const localTxs = getLocalData('uk_party_transactions', []);
+  localTxs.unshift({ ...formattedTx, synced: false });
+  saveLocalData('uk_party_transactions', localTxs);
+  return { success: true, local: true };
+};
+
+// Update a party transaction
+export const updatePartyTransaction = async (txId, txData) => {
+  const formattedTx = {
+    amount: parseFloat(parseFloat(txData.amount || 0).toFixed(2)),
+    type: txData.type || 'Due',
+    description: txData.description || ''
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('uk_party_transactions')
+        .update(formattedTx)
+        .eq('id', parseInt(txId, 10));
+
+      if (error) throw error;
+
+      executeLocalUpdatePartyTx(txId, formattedTx);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating party transaction in Supabase, falling back locally:', error.message);
+      return executeLocalUpdatePartyTx(txId, formattedTx);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalUpdatePartyTx(txId, formattedTx);
+  }
+};
+
+const queueLocalPartyTxUpdate = (txId, formattedTx) => {
+  const idStr = txId.toString();
+  if (/^\d+$/.test(idStr)) {
+    const updates = getLocalData('unsynced_party_transaction_updates', []);
+    const filtered = updates.filter(u => u.txId.toString() !== idStr);
+    filtered.push({ txId, formattedTx });
+    saveLocalData('unsynced_party_transaction_updates', filtered);
+  } else {
+    const localTxs = getLocalData('uk_party_transactions', []);
+    const idx = localTxs.findIndex(t => t.id.toString() === idStr);
+    if (idx !== -1) {
+      localTxs[idx].synced = false;
+      saveLocalData('uk_party_transactions', localTxs);
+    }
+  }
+};
+
+const executeLocalUpdatePartyTx = (txId, formattedTx) => {
+  const localTxs = getLocalData('uk_party_transactions', []);
+  const index = localTxs.findIndex(t => t.id.toString() === txId.toString());
+  if (index !== -1) {
+    localTxs[index] = {
+      ...localTxs[index],
+      ...formattedTx
+    };
+    saveLocalData('uk_party_transactions', localTxs);
+  }
+
+  queueLocalPartyTxUpdate(txId, formattedTx);
+  return { success: true, local: true };
+};
+
+// Delete a party transaction
+export const deletePartyTransaction = async (txId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('uk_party_transactions')
+        .delete()
+        .eq('id', parseInt(txId, 10));
+
+      if (error) throw error;
+
+      executeLocalDeletePartyTx(txId, false); // NOT offline/local only
+      return { success: true };
+    } catch (error) {
+      console.warn('Error deleting party transaction from Supabase, falling back locally:', error.message);
+      return executeLocalDeletePartyTx(txId, true); // IS offline/local fallback
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalDeletePartyTx(txId, true);
+  }
+};
+
+const executeLocalDeletePartyTx = (txId, isOffline = false) => {
+  const localTxs = getLocalData('uk_party_transactions', []);
+  const filtered = localTxs.filter(t => (t.id || '').toString() !== (txId || '').toString());
+  saveLocalData('uk_party_transactions', filtered);
+
+  if (isOffline) {
+    const deletedTxs = getLocalData('deleted_party_transaction_ids', []);
+    if (!deletedTxs.includes(txId.toString())) {
+      deletedTxs.push(txId.toString());
+      saveLocalData('deleted_party_transaction_ids', deletedTxs);
+    }
+  }
+
+  return { success: true, local: true };
 };
