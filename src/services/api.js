@@ -7,7 +7,7 @@ const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env ?
 // Check if Supabase project is configured in .env
 export const isSupabaseConfigured = () => {
   return (typeof supabaseUrl === 'string' && supabaseUrl.trim() !== '') &&
-         (typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() !== '');
+    (typeof supabaseAnonKey === 'string' && supabaseAnonKey.trim() !== '');
 };
 
 // Maintain compatibility with Layout.jsx which uses isApiConfigured
@@ -178,10 +178,33 @@ const getLocalSalesFallback = () => {
   }));
 };
 
+// Helper to append unsynced updates offline
+const queueLocalProductUpdate = (productId, updatedProduct) => {
+  const updates = getLocalData('unsynced_product_updates', []);
+  const filtered = updates.filter(u => u.productId !== productId);
+  filtered.push({ productId, updatedProduct });
+  saveLocalData('unsynced_product_updates', filtered);
+};
+
+// Helper to append unsynced sales offline
+const queueLocalCheckout = (cartItems, customerPhone, discount, paymentMethod, dateStr, batchTimestamp) => {
+  const checkouts = getLocalData('unsynced_checkouts', []);
+  checkouts.push({
+    cartItems,
+    customerPhone,
+    discount,
+    paymentMethod,
+    date: dateStr,
+    batchTimestamp
+  });
+  saveLocalData('unsynced_checkouts', checkouts);
+};
+
 // Helper to perform product addition locally
 const executeLocalAddProductDirect = (formattedProduct) => {
   const products = getLocalData('uk_products', DUMMY_PRODUCTS);
-  products.unshift(formattedProduct);
+  const newProduct = { ...formattedProduct, synced: false };
+  products.unshift(newProduct);
   saveLocalData('uk_products', products);
   return { created: 1, local: true };
 };
@@ -193,7 +216,7 @@ const getProductDiff = (oldProd, newProd) => {
   fields.forEach(field => {
     let oldVal = oldProd[field];
     let newVal = newProd[field];
-    
+
     // Normalize comparison for numbers vs strings
     if (field === 'buy_price' || field === 'sell_price') {
       oldVal = parseFloat(oldVal || 0).toFixed(2);
@@ -205,7 +228,7 @@ const getProductDiff = (oldProd, newProd) => {
       oldVal = (oldVal || '').toString().trim();
       newVal = (newVal || '').toString().trim();
     }
-    
+
     if (oldVal !== newVal) {
       changes[field] = { old: oldVal, new: newVal };
     }
@@ -233,6 +256,9 @@ const executeLocalUpdateProduct = (productId, updatedProduct) => {
     saveLocalData('uk_products', products);
   }
 
+  // Queue product update to be synced later
+  queueLocalProductUpdate(productId, updatedProduct);
+
   // Only log if there are actual changes
   if (Object.keys(diff).length > 0) {
     const edits = getLocalData('uk_product_edits', []);
@@ -253,7 +279,7 @@ const executeLocalUpdateProduct = (productId, updatedProduct) => {
 // Helper to perform checkout / stock reduction locally
 const executeLocalCheckout = (cartItems, customerPhone, discount = 0, paymentMethod = 'Cash') => {
   const products = getLocalData('uk_products', DUMMY_PRODUCTS);
-  
+
   // Verify stock
   for (const item of cartItems) {
     const product = products.find(p => {
@@ -271,7 +297,7 @@ const executeLocalCheckout = (cartItems, customerPhone, discount = 0, paymentMet
       }
       return false;
     });
-    
+
     if (!product) throw new Error(`Product "${item.name}" not found`);
     const currentStock = parseInt(product.stock || 0, 10);
     if (currentStock < item.quantity) {
@@ -332,6 +358,9 @@ const executeLocalCheckout = (cartItems, customerPhone, discount = 0, paymentMet
   });
   saveLocalData('uk_sales', sales);
 
+  // Queue checkout details to sync later
+  queueLocalCheckout(cartItems, customerPhone, discount, paymentMethod, dateStr, batchTimestamp);
+
   return { success: true, local: true };
 };
 
@@ -351,11 +380,11 @@ export const getProducts = async () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       return (data || []).map((p, idx) => {
         const rawId = (p.id || '').toString().trim();
         const pName = (p.name || '').toString().trim();
-        
+
         let finalId = rawId;
         if (!finalId) {
           if (pName) {
@@ -405,8 +434,8 @@ export const addProduct = async (productData) => {
     name: productData.name,
     model_barcode: productData.model_barcode || '',
     ml_mg: productData.ml_mg || '',
-    buy_price: Math.round(parseFloat(productData.buy_price || 0)),
-    sell_price: Math.round(parseFloat(productData.sell_price || 0)),
+    buy_price: parseFloat(parseFloat(productData.buy_price || 0).toFixed(2)),
+    sell_price: parseFloat(parseFloat(productData.sell_price || 0).toFixed(2)),
     stock: parseInt(productData.stock || 0, 10),
     image: '/logo.png',
     created_at: new Date().toISOString()
@@ -521,8 +550,8 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
           product_id: (update.dbProductId || update.productId || '').toString(),
           customer_phone: customerPhone || '',
           quantity: update.qtySold,
-          total_price: Math.round(finalItemTotalPrice),
-          discount: Math.round(distributedDiscount),
+          total_price: parseFloat(finalItemTotalPrice.toFixed(2)),
+          discount: parseFloat(distributedDiscount.toFixed(2)),
           payment_method: paymentMethod || 'Cash',
           sale_id: `sale_${batchTimestamp}_${index}`,
           brand: update.brand || '',
@@ -541,7 +570,7 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
         const hasSaleIdErr = salesInsertErr.message.includes('sale_id');
         const hasDiscountErr = salesInsertErr.message.includes('discount');
         const hasPayMethodErr = salesInsertErr.message.includes('payment_method');
-        
+
         if (hasSaleIdErr || hasDiscountErr || hasPayMethodErr) {
           console.warn('Newer columns not found in customer_sales schema. Retrying insertion with fallback schema.');
           const fallbackRows = customerSalesRows.map(row => {
@@ -573,37 +602,6 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
         })
       );
 
-      // 4. Best-effort backup logging into uk_sales
-      try {
-        const dateStr = new Date().toISOString();
-        const salesRows = stockUpdates.map((update, index) => {
-          const itemSubtotal = update.unitPrice * update.qtySold;
-          const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
-          const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
-
-          return {
-            sale_id: `sale_${batchTimestamp}_${index}`,
-            product_id: (update.dbProductId || update.productId || '').toString(),
-            product_name: update.name,
-            category: update.category,
-            quantity: update.qtySold,
-            unit_price: update.unitPrice,
-            total_price: finalItemTotalPrice,
-            discount: distributedDiscount,
-            payment_method: paymentMethod || 'Cash',
-            date: dateStr,
-            brand: update.brand || '',
-            serial_no: update.serial_no || '',
-            model_barcode: update.model_barcode || '',
-            ml_mg: update.ml_mg || ''
-          };
-        });
-        const { error: logErr } = await supabase.from('uk_sales').insert(salesRows);
-        if (logErr) console.warn('Backup uk_sales logging skipped:', logErr.message);
-      } catch (logErr) {
-        console.warn('Backup uk_sales logging skipped:', logErr.message);
-      }
-
       return { success: true };
     } catch (error) {
       console.error('Error executing batch sales in Supabase, falling back locally:', error.message);
@@ -624,8 +622,8 @@ export const updateProduct = async (productId, productData) => {
     name: productData.name,
     model_barcode: productData.model_barcode || '',
     ml_mg: productData.ml_mg || '',
-    buy_price: Math.round(parseFloat(productData.buy_price || 0)),
-    sell_price: Math.round(parseFloat(productData.sell_price || 0)),
+    buy_price: parseFloat(parseFloat(productData.buy_price || 0).toFixed(2)),
+    sell_price: parseFloat(parseFloat(productData.sell_price || 0).toFixed(2)),
     stock: parseInt(productData.stock || 0, 10),
     image: '/logo.png'
   };
@@ -638,7 +636,7 @@ export const updateProduct = async (productId, productData) => {
         .select('*')
         .eq('id', productId)
         .single();
-      
+
       let diff = {};
       if (!fetchErr && currentProduct) {
         diff = getProductDiff(currentProduct, formattedProduct);
@@ -733,6 +731,8 @@ export const getSalesHistory = async () => {
           quantity,
           unit_price: unitPrice,
           total_price: totalPrice,
+          discount: parseFloat(s.discount || 0),
+          payment_method: s.payment_method || 'Cash',
           customer_phone: s.customer_phone || '',
           date: s.created_at || '',
         };
@@ -745,4 +745,392 @@ export const getSalesHistory = async () => {
     await new Promise(resolve => setTimeout(resolve, 300));
     return getLocalSalesFallback();
   }
+};
+
+/**
+ * ----------------------------------------------------
+ * EXPENSES OPERATIONS
+ * ----------------------------------------------------
+ */
+
+// Fetch all expenses
+export const getExpenses = async () => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data || []).map(exp => ({
+        id: exp.id.toString(),
+        name: exp.name || '',
+        amount: parseFloat(exp.amount || 0),
+        transaction_type: exp.transaction_type || 'Cash',
+        created_at: exp.created_at || ''
+      }));
+    } catch (error) {
+      console.warn('Error fetching expenses from Supabase, falling back to local storage:', error.message);
+      return getLocalExpensesFallback();
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalExpensesFallback();
+  }
+};
+
+const getLocalExpensesFallback = () => {
+  return getLocalData('uk_expenses', []).map(exp => ({
+    ...exp,
+    amount: parseFloat(exp.amount || 0)
+  }));
+};
+
+// Add an expense
+export const addExpense = async (expenseData) => {
+  const formattedExpense = {
+    name: expenseData.name,
+    amount: parseFloat(expenseData.amount || 0),
+    transaction_type: expenseData.transaction_type || 'Cash',
+    created_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_expenses')
+        .insert([formattedExpense])
+        .select();
+
+      if (error) throw error;
+
+      // sync local cache
+      const localExpenses = getLocalData('uk_expenses', []);
+      const newId = data && data[0] ? data[0].id.toString() : `exp_${Date.now()}`;
+      localExpenses.unshift({ ...formattedExpense, id: newId });
+      saveLocalData('uk_expenses', localExpenses);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error adding expense to Supabase, falling back locally:', error.message);
+      return executeLocalAddExpense(formattedExpense);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalAddExpense(formattedExpense);
+  }
+};
+
+const executeLocalAddExpense = (formattedExpense) => {
+  const localExpenses = getLocalData('uk_expenses', []);
+  const newExpense = { ...formattedExpense, id: `exp_${Date.now()}`, synced: false };
+  localExpenses.unshift(newExpense);
+  saveLocalData('uk_expenses', localExpenses);
+  return { success: true, local: true };
+};
+
+// Delete an expense
+export const deleteExpense = async (expenseId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const isNumeric = /^\d+$/.test(expenseId.toString());
+      const { error } = await supabase
+        .from('uk_expenses')
+        .delete()
+        .eq(isNumeric ? 'id' : 'name', isNumeric ? parseInt(expenseId, 10) : expenseId);
+
+      if (error) {
+        const { error: secondErr } = await supabase
+          .from('uk_expenses')
+          .delete()
+          .eq('name', expenseId);
+        if (secondErr) throw error;
+      }
+
+      executeLocalDeleteExpense(expenseId);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error deleting expense from Supabase, falling back locally:', error.message);
+      return executeLocalDeleteExpense(expenseId);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalDeleteExpense(expenseId);
+  }
+};
+
+const executeLocalDeleteExpense = (expenseId) => {
+  const localExpenses = getLocalData('uk_expenses', []);
+  const filtered = localExpenses.filter(exp => exp.id.toString() !== expenseId.toString());
+  saveLocalData('uk_expenses', filtered);
+  return { success: true, local: true };
+};
+
+// Update an expense
+export const updateExpense = async (expenseId, expenseData) => {
+  const formattedExpense = {
+    name: expenseData.name,
+    amount: parseFloat(expenseData.amount || 0),
+    transaction_type: expenseData.transaction_type || 'Cash'
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const isNumeric = /^\d+$/.test(expenseId.toString());
+      const { error } = await supabase
+        .from('uk_expenses')
+        .update(formattedExpense)
+        .eq(isNumeric ? 'id' : 'name', isNumeric ? parseInt(expenseId, 10) : expenseId);
+
+      if (error) throw error;
+
+      executeLocalUpdateExpense(expenseId, formattedExpense);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating expense in Supabase, falling back locally:', error.message);
+      return executeLocalUpdateExpense(expenseId, formattedExpense);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalUpdateExpense(expenseId, formattedExpense);
+  }
+};
+
+// Helper to queue expense updates offline
+const queueLocalExpenseUpdate = (expenseId, formattedExpense) => {
+  if (/^\d+$/.test(expenseId.toString())) {
+    const updates = getLocalData('unsynced_expense_updates', []);
+    const filtered = updates.filter(u => u.expenseId.toString() !== expenseId.toString());
+    filtered.push({ expenseId, formattedExpense });
+    saveLocalData('unsynced_expense_updates', filtered);
+  } else {
+    // If it's a locally created offline expense, make sure its synced: false flag remains
+    const localExpenses = getLocalData('uk_expenses', []);
+    const idx = localExpenses.findIndex(e => e.id.toString() === expenseId.toString());
+    if (idx !== -1) {
+      localExpenses[idx].synced = false;
+      saveLocalData('uk_expenses', localExpenses);
+    }
+  }
+};
+
+const executeLocalUpdateExpense = (expenseId, formattedExpense) => {
+  const localExpenses = getLocalData('uk_expenses', []);
+  const index = localExpenses.findIndex(exp => exp.id.toString() === expenseId.toString());
+  if (index !== -1) {
+    localExpenses[index] = {
+      ...localExpenses[index],
+      ...formattedExpense
+    };
+    saveLocalData('uk_expenses', localExpenses);
+  }
+
+  // Queue expense update
+  queueLocalExpenseUpdate(expenseId, formattedExpense);
+
+  return { success: true, local: true };
+};
+
+// Supabase-direct checkout function to help with sync
+const executeSupabaseCheckout = async (cartItems, customerPhone, discount, paymentMethod, dateStr, batchTimestamp) => {
+  const { data: dbProducts, error: fetchErr } = await supabase
+    .from('uk_products')
+    .select('*');
+
+  if (fetchErr) throw fetchErr;
+
+  const stockUpdates = [];
+  for (const item of cartItems) {
+    const product = dbProducts.find(p => {
+      const dbId = (p.id || '').toString().trim();
+      if (dbId && dbId === item.id) return true;
+      return false;
+    });
+
+    if (!product) throw new Error(`Product not found`);
+    const currentStock = parseInt(product.stock || 0, 10);
+    const dbId = (product.id || '').toString().trim();
+    stockUpdates.push({
+      productId: item.id,
+      dbProductId: dbId || null,
+      newStock: currentStock - item.quantity,
+      name: product.name,
+      category: product.category || '',
+      brand: product.brand || '',
+      serial_no: product.serial_no || '',
+      model_barcode: product.model_barcode || '',
+      ml_mg: product.ml_mg || '',
+      unitPrice: parseFloat(product.sell_price || 0),
+      qtySold: item.quantity
+    });
+  }
+
+  const totalCartVal = stockUpdates.reduce((sum, update) => sum + (update.unitPrice * update.qtySold), 0);
+
+  const customerSalesRows = stockUpdates.map((update, index) => {
+    const itemSubtotal = update.unitPrice * update.qtySold;
+    const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
+    const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
+
+    return {
+      product_id: (update.dbProductId || update.productId || '').toString(),
+      customer_phone: customerPhone || '',
+      quantity: update.qtySold,
+      total_price: parseFloat(finalItemTotalPrice.toFixed(2)),
+      discount: parseFloat(distributedDiscount.toFixed(2)),
+      payment_method: paymentMethod || 'Cash',
+      sale_id: `sale_${batchTimestamp}_${index}`,
+      brand: update.brand || '',
+      serial_no: update.serial_no || '',
+      model_barcode: update.model_barcode || '',
+      ml_mg: update.ml_mg || '',
+      created_at: dateStr
+    };
+  });
+
+  const { error: salesInsertErr } = await supabase
+    .from('customer_sales')
+    .insert(customerSalesRows);
+
+  if (salesInsertErr) throw salesInsertErr;
+
+  await Promise.all(
+    stockUpdates.map(async (update) => {
+      const { error: patchErr } = await supabase
+        .from('uk_products')
+        .update({ stock: update.newStock })
+        .eq('id', update.dbProductId || update.productId);
+      if (patchErr) throw patchErr;
+    })
+  );
+
+  return { success: true };
+};
+
+// Sync all offline created products, checkouts, and expenses to Supabase
+export const syncOfflineData = async () => {
+  if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
+
+  let syncCount = 0;
+
+  try {
+    // 1. Sync New Products (synced: false)
+    const localProducts = getLocalData('uk_products', DUMMY_PRODUCTS);
+    const unsyncedProducts = localProducts.filter(p => p.synced === false);
+    for (const prod of unsyncedProducts) {
+      const { synced, ...supabaseProd } = prod;
+      const { error } = await supabase
+        .from('uk_products')
+        .insert([supabaseProd]);
+
+      if (!error) {
+        prod.synced = true;
+        syncCount++;
+      }
+    }
+    if (unsyncedProducts.length > 0) {
+      saveLocalData('uk_products', localProducts);
+    }
+
+    // 2. Sync Product Updates
+    const unsyncedUpdates = getLocalData('unsynced_product_updates', []);
+    const remainingUpdates = [];
+    for (const update of unsyncedUpdates) {
+      const { error } = await supabase
+        .from('uk_products')
+        .update(update.updatedProduct)
+        .eq('id', update.productId);
+
+      if (!error) {
+        syncCount++;
+      } else {
+        remainingUpdates.push(update);
+      }
+    }
+    saveLocalData('unsynced_product_updates', remainingUpdates);
+
+    // 3. Sync Checkouts (Sales)
+    const unsyncedCheckouts = getLocalData('unsynced_checkouts', []);
+    const remainingCheckouts = [];
+    for (const checkout of unsyncedCheckouts) {
+      try {
+        const res = await executeSupabaseCheckout(
+          checkout.cartItems,
+          checkout.customerPhone,
+          checkout.discount,
+          checkout.paymentMethod,
+          checkout.date,
+          checkout.batchTimestamp
+        );
+        if (res && res.success) {
+          syncCount++;
+        } else {
+          remainingCheckouts.push(checkout);
+        }
+      } catch (err) {
+        remainingCheckouts.push(checkout);
+      }
+    }
+    saveLocalData('unsynced_checkouts', remainingCheckouts);
+
+    // 4. Sync New Expenses (synced: false)
+    const localExpenses = getLocalData('uk_expenses', []);
+    const unsyncedExpenses = localExpenses.filter(e => e.synced === false);
+    for (const exp of unsyncedExpenses) {
+      const { synced, id, ...supabaseExp } = exp;
+      const { data, error } = await supabase
+        .from('uk_expenses')
+        .insert([supabaseExp])
+        .select();
+
+      if (!error) {
+        exp.synced = true;
+        if (data && data[0]) {
+          exp.id = data[0].id.toString();
+        }
+        syncCount++;
+      }
+    }
+    if (unsyncedExpenses.length > 0) {
+      saveLocalData('uk_expenses', localExpenses);
+    }
+
+    // 5. Sync Expense Updates
+    const unsyncedExpenseUpdates = getLocalData('unsynced_expense_updates', []);
+    const remainingExpUpdates = [];
+    for (const update of unsyncedExpenseUpdates) {
+      const { error } = await supabase
+        .from('uk_expenses')
+        .update(update.formattedExpense)
+        .eq('id', parseInt(update.expenseId, 10));
+
+      if (!error) {
+        syncCount++;
+      } else {
+        remainingExpUpdates.push(update);
+      }
+    }
+    saveLocalData('unsynced_expense_updates', remainingExpUpdates);
+
+    return { success: true, syncedCount: syncCount };
+  } catch (err) {
+    console.error('Error syncing offline data:', err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+// Helper to check if any unsynced local data is pending
+export const getUnsyncedCount = () => {
+  const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+  const unsyncedProductsCount = products.filter(p => p.synced === false).length;
+
+  const expenses = getLocalData('uk_expenses', []);
+  const unsyncedExpensesCount = expenses.filter(e => e.synced === false).length;
+
+  const unsyncedUpdatesCount = getLocalData('unsynced_product_updates', []).length;
+  const unsyncedCheckoutsCount = getLocalData('unsynced_checkouts', []).length;
+  const unsyncedExpenseUpdatesCount = getLocalData('unsynced_expense_updates', []).length;
+
+  return unsyncedProductsCount + unsyncedExpensesCount + unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount;
 };

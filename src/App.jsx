@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import AddProduct from './pages/AddProduct';
 import SellProducts from './pages/SellProducts';
 import Cart from './pages/Cart';
+import Expenses from './pages/Expenses';
 import { toast } from 'react-toastify';
 
 export default function App() {
@@ -123,6 +124,7 @@ export default function App() {
               />
             } 
           />
+          <Route path="/expenses" element={<Expenses />} />
         </Routes>
       </Layout>
       <ToastContainer 

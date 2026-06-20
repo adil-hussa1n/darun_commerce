@@ -10,9 +10,11 @@ import {
   RefreshCw,
   Handshake,
   Wallet,
-  Receipt
+  Receipt,
+  Coins,
+  Info
 } from 'lucide-react';
-import { getProducts, getSalesHistory } from '../services/api';
+import { getProducts, getSalesHistory, getExpenses, syncOfflineData, getUnsyncedCount } from '../services/api';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { toast } from 'react-toastify';
 
@@ -21,6 +23,47 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+
+  // Filtering States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('All');
+  const [dateRangeFilter, setDateRangeFilter] = useState('All Time');
+
+  // Unsynced state
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+  // Date range checking helper
+  const isDateWithinRange = (dateString, range) => {
+    if (range === 'All Time') return true;
+    if (!dateString) return false;
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (range) {
+      case 'Today':
+        return date >= startOfToday;
+      case 'Yesterday': {
+        const startOfYesterday = new Date(startOfToday);
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        return date >= startOfYesterday && date < startOfToday;
+      }
+      case 'Last 7 Days': {
+        const startOf7DaysAgo = new Date(startOfToday);
+        startOf7DaysAgo.setDate(startOf7DaysAgo.getDate() - 7);
+        return date >= startOf7DaysAgo;
+      }
+      case 'Last 30 Days': {
+        const startOf30DaysAgo = new Date(startOfToday);
+        startOf30DaysAgo.setDate(startOf30DaysAgo.getDate() - 30);
+        return date >= startOf30DaysAgo;
+      }
+      default:
+        return true;
+    }
+  };
 
   const loadDashboardData = async (isManual = false, isSilent = false) => {
     try {
@@ -29,13 +72,39 @@ export default function Dashboard() {
       } else if (!isSilent) {
         setLoading(true);
       }
-      const [prodList, salesList] = await Promise.all([
+
+      // 1. Sync offline data first if any
+      let syncedAnything = false;
+      let countSynced = 0;
+      const countPending = getUnsyncedCount();
+      if (countPending > 0) {
+        try {
+          const syncRes = await syncOfflineData();
+          if (syncRes && syncRes.success && syncRes.syncedCount > 0) {
+            syncedAnything = true;
+            countSynced = syncRes.syncedCount;
+          }
+        } catch (syncErr) {
+          console.warn('Auto-sync offline data failed:', syncErr);
+        }
+      }
+
+      // 2. Fetch fresh data
+      const [prodList, salesList, expensesList] = await Promise.all([
         getProducts(),
-        getSalesHistory()
+        getSalesHistory(),
+        getExpenses()
       ]);
       setProducts(prodList);
       setSales(salesList);
-      if (isManual) {
+      setExpenses(expensesList);
+      
+      // Update unsynced count
+      setUnsyncedCount(getUnsyncedCount());
+
+      if (syncedAnything) {
+        toast.success(`Successfully uploaded ${countSynced} offline entries to Supabase!`);
+      } else if (isManual) {
         toast.success('Inventory synced successfully!');
       }
     } catch (err) {
@@ -68,15 +137,35 @@ export default function Dashboard() {
     );
   }
 
-  // Calculate stats
-  const totalProducts = products.length;
-  
-  // Total Revenue & Units Sold
-  const totalRevenue = sales.reduce((acc, sale) => acc + parseFloat(sale.total_price || 0), 0);
-  const totalPurchaseCount = sales.length;
+  // Filtered Sales
+  const filteredSales = sales.filter(sale => {
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q || 
+      (sale.product_name || '').toLowerCase().includes(q) ||
+      (sale.customer_phone || '').toLowerCase().includes(q);
+      
+    const matchesPayment = paymentFilter === 'All' || 
+      (sale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase();
+      
+    const matchesDate = isDateWithinRange(sale.date, dateRangeFilter);
+    
+    return matchesSearch && matchesPayment && matchesDate;
+  });
 
-  // Total Profit
-  const totalProfit = sales.reduce((acc, sale) => {
+  // Filtered Expenses
+  const filteredExpenses = expenses.filter(exp => {
+    const matchesDate = isDateWithinRange(exp.created_at, dateRangeFilter);
+    const matchesPayment = paymentFilter === 'All' || 
+      (exp.transaction_type || '').toLowerCase() === paymentFilter.toLowerCase();
+    return matchesDate && matchesPayment;
+  });
+
+  // Total Revenue & Units Sold
+  const totalRevenue = filteredSales.reduce((acc, sale) => acc + parseFloat(sale.total_price || 0), 0);
+  const totalPurchaseCount = filteredSales.length;
+
+  // Total Profit (Gross)
+  const grossProfit = filteredSales.reduce((acc, sale) => {
     const product = products.find(p => p.name.trim().toLowerCase() === sale.product_name.trim().toLowerCase());
     if (product) {
       const buyPrice = parseFloat(product.buy_price || 0);
@@ -88,6 +177,12 @@ export default function Dashboard() {
       return acc + (totalPrice * 0.5);
     }
   }, 0);
+
+  // Total Expenses
+  const totalExpenses = filteredExpenses.reduce((acc, exp) => acc + parseFloat(exp.amount || 0), 0);
+
+  // Net Profit
+  const netProfit = grossProfit - totalExpenses;
 
   // Stock Investment: sum of (buy_price * stock) for all products
   const stockInvestment = products.reduce((acc, p) => {
@@ -112,6 +207,25 @@ export default function Dashboard() {
           <Handshake className="w-6 h-6 text-beauty-accent shrink-0 animate-pulse" />
         </div>
       </div>
+
+      {/* Unsynced Offline Entries Alert */}
+      {unsyncedCount > 0 && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-pulse-subtle">
+          <div className="flex items-center gap-2.5 text-amber-400">
+            <Info className="w-5 h-5 shrink-0" />
+            <div className="text-xs font-semibold">
+              You have <span className="text-white font-bold underline">{unsyncedCount}</span> offline transactions/products pending database sync. Click "Sync" to upload.
+            </div>
+          </div>
+          <button
+            onClick={() => loadDashboardData(true)}
+            disabled={syncing}
+            className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-beauty-dark font-bold text-[10px] rounded-lg tracking-wider transition-all disabled:opacity-50 cursor-pointer w-full sm:w-auto text-center shrink-0"
+          >
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </div>
+      )}
 
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -152,8 +266,51 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Filtering Panel */}
+      <div className="glass-panel p-4 rounded-2xl border border-white/5 bg-beauty-rose/40 shadow-md flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+        <div className="text-xs font-bold text-white uppercase tracking-wider">
+          Filter Overview
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1 max-w-2xl justify-end">
+          {/* Search bar */}
+          <input
+            type="text"
+            placeholder="Search product or customer phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-1 focus:ring-beauty-accent text-xs placeholder:text-beauty-taupe/40 w-full sm:w-60"
+          />
+
+          {/* Payment Method filter */}
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs"
+          >
+            <option value="All">All Payments</option>
+            <option value="Cash">Cash</option>
+            <option value="bKash">bKash</option>
+            <option value="Card">Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+
+          {/* Date Range filter */}
+          <select
+            value={dateRangeFilter}
+            onChange={(e) => setDateRangeFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs"
+          >
+            <option value="All Time">All Time</option>
+            <option value="Today">Today</option>
+            <option value="Yesterday">Yesterday</option>
+            <option value="Last 7 Days">Last 7 Days</option>
+            <option value="Last 30 Days">Last 30 Days</option>
+          </select>
+        </div>
+      </div>
+
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         
         {/* KPI: Total Sales */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
@@ -191,21 +348,39 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KPI: Total Profit */}
+        {/* KPI: Net Profit */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
           <div className="space-y-1">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
-              Total Profit
+              Net Profit
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-emerald-400">
-              {formatCurrency(totalProfit)}
+            <h3 className={`text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {formatCurrency(netProfit)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
-              Data from 26 May 2026.
+              Gross profit - expenses
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'}`}>
             <TrendingUp className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* KPI: Total Expenses */}
+        <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
+              Total Expenses
+            </span>
+            <h3 className="text-2xl font-bold tracking-tight text-rose-300">
+              {formatCurrency(totalExpenses)}
+            </h3>
+            <span className="text-[10px] text-beauty-taupe/80 block">
+              Operational costs
+            </span>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-300">
+            <Coins className="w-6 h-6" />
           </div>
         </div>
 
@@ -250,14 +425,14 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            {sales.length === 0 ? (
+            {filteredSales.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="w-12 h-12 rounded-full bg-beauty-cream flex items-center justify-center text-beauty-taupe/40 mb-3">
                   <ShoppingBag className="w-6 h-6" />
                 </div>
-                <h4 className="text-sm font-semibold text-white">No Sales Yet</h4>
+                <h4 className="text-sm font-semibold text-white">No Matching Sales</h4>
                 <p className="text-xs text-beauty-taupe max-w-xs mt-1">
-                  Sales will show up here once products are sold on the Sell Products page.
+                  Adjust your search or filter inputs to see transaction records.
                 </p>
               </div>
             ) : (
@@ -277,7 +452,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                    {sales.slice(0, 10).map((sale, idx) => (
+                    {filteredSales.slice(0, 10).map((sale, idx) => (
                       <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
                         <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
                           {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -321,10 +496,10 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {sales.length > 10 && (
+          {filteredSales.length > 10 && (
             <div className="border-t border-white/5 pt-4 text-center mt-4">
               <span className="text-[10px] text-beauty-taupe font-medium">
-                Showing latest 10 of {sales.length} transactions
+                Showing latest 10 of {filteredSales.length} filtered transactions
               </span>
             </div>
           )}
