@@ -179,6 +179,7 @@ const getLocalSalesFallback = () => {
   const sales = getLocalData('uk_sales', DUMMY_SALES);
   return sales.map(s => ({
     ...s,
+    id: s.id ? s.id.toString() : (s.sale_id ? s.sale_id.toString() : `sale_${Date.now()}`),
     quantity: parseInt(s.quantity || 0, 10),
     unit_price: parseFloat(s.unit_price || 0),
     total_price: parseFloat(s.total_price || 0)
@@ -486,7 +487,40 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
   if (isSupabaseConfigured()) {
     try {
       const batchTimestamp = Date.now();
+      const formattedItems = cartItems.map(item => ({
+        product_id: item.id,
+        quantity: item.quantity
+      }));
 
+      // Try atomic RPC checkout first
+      const { error: rpcErr } = await supabase.rpc('execute_checkout', {
+        p_customer_phone: customerPhone || '',
+        p_payment_method: paymentMethod || 'Cash',
+        p_discount: parseFloat(discount),
+        p_batch_id: `sale_${batchTimestamp}`,
+        p_cart_items: formattedItems
+      });
+
+      // If RPC is successful, return success
+      if (!rpcErr) {
+        return { success: true };
+      }
+
+      // If RPC error indicates the function doesn't exist, log warning and run legacy client-side fallback
+      const fnNotExist = rpcErr.message && (
+        rpcErr.message.includes('does not exist') ||
+        rpcErr.message.includes('not found') ||
+        rpcErr.code === '42883'
+      );
+
+      if (fnNotExist) {
+        console.warn('RPC execute_checkout not found on database. Falling back to legacy client checkout.');
+      } else {
+        // For other database errors (e.g. stock validation failures from PostgreSQL), throw the error
+        throw rpcErr;
+      }
+
+      // ─── LEGACY CLIENT-SIDE CHECKOUT (FALLBACK) ───
       // 1. Fetch current raw products to check stock
       const { data: dbProducts, error: fetchErr } = await supabase
         .from('uk_products')
@@ -732,11 +766,20 @@ export const getSalesHistory = async () => {
           : 0;
 
         return {
+          id: s.id.toString(),
           sale_id: s.sale_id || `sale_${s.id}`,
-          product_name: product ? product.name : (productIdStr || 'Unknown Product'),
-          category: product ? (product.category || '') : '',
+          product_name: (s.product_name_snapshot || '').trim() || (product ? product.name : (productIdStr || 'Unknown Product')),
+          category: (s.category_snapshot || '').trim() || (product ? (product.category || '') : ''),
           quantity,
-          unit_price: unitPrice,
+          unit_price: s.sell_price_snapshot !== undefined && s.sell_price_snapshot !== null
+            ? parseFloat(s.sell_price_snapshot)
+            : unitPrice,
+          buy_price_snapshot: s.buy_price_snapshot !== undefined && s.buy_price_snapshot !== null
+            ? parseFloat(s.buy_price_snapshot)
+            : null,
+          sell_price_snapshot: s.sell_price_snapshot !== undefined && s.sell_price_snapshot !== null
+            ? parseFloat(s.sell_price_snapshot)
+            : null,
           total_price: totalPrice,
           discount: parseFloat(s.discount || 0),
           payment_method: s.payment_method || 'Cash',
@@ -1284,6 +1327,30 @@ export const syncOfflineData = async () => {
     }
     saveLocalData('deleted_expense_ids', remainingDeletedExpenses);
 
+    // 13. Sync Returns (Added)
+    const unsyncedReturns = getLocalData('unsynced_returns', []);
+    const remainingReturns = [];
+    for (const ret of unsyncedReturns) {
+      try {
+        const res = await executeSupabaseReturn(
+          ret.saleItemId,
+          ret.returnedQty,
+          ret.refundAmount,
+          ret.restockStatus,
+          ret.returnId,
+          ret.date
+        );
+        if (res && res.success) {
+          syncCount++;
+        } else {
+          remainingReturns.push(ret);
+        }
+      } catch (err) {
+        remainingReturns.push(ret);
+      }
+    }
+    saveLocalData('unsynced_returns', remainingReturns);
+
     return { success: true, syncedCount: syncCount };
   } catch (err) {
     console.error('Error syncing offline data:', err.message);
@@ -1314,11 +1381,13 @@ export const getUnsyncedCount = () => {
   const unsyncedDeletedPartiesCount = getLocalData('deleted_party_ids', []).length;
   const unsyncedDeletedTxsCount = getLocalData('deleted_party_transaction_ids', []).length;
   const unsyncedDeletedExpensesCount = getLocalData('deleted_expense_ids', []).length;
+  const unsyncedReturnsCount = getLocalData('unsynced_returns', []).length;
 
   return unsyncedProductsCount + unsyncedExpensesCount + unsyncedPartiesCount + unsyncedPartyTxsCount +
          unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount +
          unsyncedPartyUpdatesCount + unsyncedPartyTxUpdatesCount +
-         unsyncedDeletedPartiesCount + unsyncedDeletedTxsCount + unsyncedDeletedExpensesCount;
+         unsyncedDeletedPartiesCount + unsyncedDeletedTxsCount + unsyncedDeletedExpensesCount +
+         unsyncedReturnsCount;
 };
 
 /**
@@ -1767,6 +1836,198 @@ const executeLocalDeletePartyTx = (txId, isOffline = false) => {
       saveLocalData('deleted_party_transaction_ids', deletedTxs);
     }
   }
+
+  return { success: true, local: true };
+};
+
+/**
+ * ----------------------------------------------------
+ * PRODUCT RETURNS OPERATIONS
+ * ----------------------------------------------------
+ */
+
+// Fetch all returns
+export const getReturns = async () => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('product_returns')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(r => ({
+        id: r.id.toString(),
+        return_id: r.return_id,
+        sale_item_id: r.sale_item_id.toString(),
+        returned_quantity: parseInt(r.returned_quantity || 0, 10),
+        refund_amount: parseFloat(r.refund_amount || 0),
+        restock_status: r.restock_status || 'Restocked',
+        created_at: r.created_at || ''
+      }));
+    } catch (error) {
+      console.warn('Error fetching returns from Supabase, falling back to local storage:', error.message);
+      return getLocalReturnsFallback();
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalReturnsFallback();
+  }
+};
+
+const getLocalReturnsFallback = () => {
+  return getLocalData('uk_product_returns', []).map(r => ({
+    ...r,
+    returned_quantity: parseInt(r.returned_quantity || 0, 10),
+    refund_amount: parseFloat(r.refund_amount || 0)
+  }));
+};
+
+// Execute a product return
+export const executeReturn = async (saleItemId, returnedQty, refundAmount, restockStatus) => {
+  const returnId = `ret_${Date.now()}`;
+  const dateStr = new Date().toISOString();
+
+  if (isSupabaseConfigured()) {
+    try {
+      await executeSupabaseReturn(saleItemId, returnedQty, refundAmount, restockStatus, returnId, dateStr);
+      
+      // Also update local cache so dashboard works offline
+      const localReturns = getLocalData('uk_product_returns', []);
+      localReturns.unshift({
+        id: `ret_${Date.now()}`,
+        return_id: returnId,
+        sale_item_id: saleItemId.toString(),
+        returned_quantity: parseInt(returnedQty, 10),
+        refund_amount: parseFloat(refundAmount),
+        restock_status: restockStatus,
+        created_at: dateStr,
+        synced: true
+      });
+      saveLocalData('uk_product_returns', localReturns);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error executing return in Supabase, falling back locally:', error.message);
+      return executeLocalReturn(saleItemId, returnedQty, refundAmount, restockStatus, returnId, dateStr);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalReturn(saleItemId, returnedQty, refundAmount, restockStatus, returnId, dateStr);
+  }
+};
+
+const executeSupabaseReturn = async (saleItemId, returnedQty, refundAmount, restockStatus, returnId, dateStr) => {
+  // Try atomic RPC
+  const { error: rpcErr } = await supabase.rpc('execute_return', {
+    p_return_id: returnId,
+    p_sale_item_id: parseInt(saleItemId, 10),
+    p_returned_quantity: parseInt(returnedQty, 10),
+    p_refund_amount: parseFloat(refundAmount),
+    p_restock_status: restockStatus
+  });
+
+  if (!rpcErr) {
+    return { success: true };
+  }
+
+  // Fallback check
+  const fnNotExist = rpcErr.message && (
+    rpcErr.message.includes('does not exist') ||
+    rpcErr.message.includes('not found') ||
+    rpcErr.code === '42883'
+  );
+
+  if (fnNotExist) {
+    console.warn('RPC execute_return not found on database. Falling back to client execution.');
+    
+    // Fetch original sale item details to find product ID
+    const { data: saleItem, error: fetchErr } = await supabase
+      .from('customer_sales')
+      .select('*')
+      .eq('id', parseInt(saleItemId, 10))
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    // Insert return record
+    const { error: insErr } = await supabase
+      .from('product_returns')
+      .insert([{
+        return_id: returnId,
+        sale_item_id: parseInt(saleItemId, 10),
+        returned_quantity: parseInt(returnedQty, 10),
+        refund_amount: parseFloat(refundAmount),
+        restock_status: restockStatus,
+        created_at: dateStr
+      }]);
+
+    if (insErr) throw insErr;
+
+    // Update stock if restocked
+    if (restockStatus === 'Restocked' && saleItem.product_id) {
+      const { data: product, error: prodFetchErr } = await supabase
+        .from('uk_products')
+        .select('stock')
+        .eq('id', saleItem.product_id)
+        .single();
+
+      if (!prodFetchErr && product) {
+        const newStock = parseInt(product.stock || 0, 10) + parseInt(returnedQty, 10);
+        await supabase
+          .from('uk_products')
+          .update({ stock: newStock })
+          .eq('id', saleItem.product_id);
+      }
+    }
+
+    return { success: true };
+  } else {
+    throw rpcErr;
+  }
+};
+
+const executeLocalReturn = (saleItemId, returnedQty, refundAmount, restockStatus, returnId, dateStr) => {
+  const localReturns = getLocalData('uk_product_returns', []);
+  const newReturn = {
+    id: `ret_${Date.now()}`,
+    return_id: returnId,
+    sale_item_id: saleItemId.toString(),
+    returned_quantity: parseInt(returnedQty, 10),
+    refund_amount: parseFloat(refundAmount),
+    restock_status: restockStatus,
+    created_at: dateStr,
+    synced: false
+  };
+  localReturns.unshift(newReturn);
+  saveLocalData('uk_product_returns', localReturns);
+
+  // If restocking, increase local product stock
+  if (restockStatus === 'Restocked') {
+    const products = getLocalData('uk_products', DUMMY_PRODUCTS);
+    const sales = getLocalData('uk_sales', DUMMY_SALES);
+    const saleItem = sales.find(s => s.sale_id === saleItemId || s.id === saleItemId);
+    if (saleItem) {
+      const product = products.find(p => p.name.trim().toLowerCase() === saleItem.product_name.trim().toLowerCase());
+      if (product) {
+        product.stock = (parseInt(product.stock || 0, 10) + parseInt(returnedQty, 10)).toString();
+        saveLocalData('uk_products', products);
+      }
+    }
+  }
+
+  // Queue return for offline sync
+  const unsyncedReturns = getLocalData('unsynced_returns', []);
+  unsyncedReturns.push({
+    saleItemId,
+    returnedQty,
+    refundAmount,
+    restockStatus,
+    returnId,
+    date: dateStr
+  });
+  saveLocalData('unsynced_returns', unsyncedReturns);
 
   return { success: true, local: true };
 };

@@ -14,9 +14,11 @@ import {
   Coins,
   Info,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { getProducts, getSalesHistory, getExpenses, syncOfflineData, getUnsyncedCount } from '../services/api';
+import { getProducts, getSalesHistory, getExpenses, getReturns, executeReturn, syncOfflineData, getUnsyncedCount } from '../services/api';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { toast } from 'react-toastify';
 
@@ -26,11 +28,24 @@ export default function Dashboard() {
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [returnsList, setReturnsList] = useState([]);
+
+  // Return Product Modal States
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedSaleItem, setSelectedSaleItem] = useState(null);
+  const [returnQtyInput, setReturnQtyInput] = useState(1);
+  const [refundAmtInput, setRefundAmtInput] = useState('');
+  const [restockStatus, setRestockStatus] = useState('Restocked');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
 
   // Filtering States
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [dateRangeFilter, setDateRangeFilter] = useState('All Time');
+
+  // Purchasing History Pagination States
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyItemsPerPage = 10;
 
   // Unsynced state
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -51,6 +66,11 @@ export default function Dashboard() {
     }
     return () => clearTimeout(timer);
   }, [showProfit]);
+
+  // Reset pagination on filter changes
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [searchQuery, paymentFilter, dateRangeFilter]);
 
   // Date range checking helper
   const isDateWithinRange = (dateString, range) => {
@@ -109,14 +129,16 @@ export default function Dashboard() {
       }
 
       // 2. Fetch fresh data
-      const [prodList, salesList, expensesList] = await Promise.all([
+      const [prodList, salesList, expensesList, returnsRes] = await Promise.all([
         getProducts(),
         getSalesHistory(),
-        getExpenses()
+        getExpenses(),
+        getReturns()
       ]);
       setProducts(prodList);
       setSales(salesList);
       setExpenses(expensesList);
+      setReturnsList(returnsRes || []);
 
       // Update unsynced count
       setUnsyncedCount(getUnsyncedCount());
@@ -134,6 +156,56 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
       setSyncing(false);
+    }
+  };
+
+  const handleReturnSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedSaleItem) return;
+
+    const returnQty = parseInt(returnQtyInput, 10);
+    const refundAmt = parseFloat(refundAmtInput);
+
+    const alreadyReturnedQty = returnsList
+      .filter(r => r.sale_item_id === selectedSaleItem.id || r.sale_item_id === selectedSaleItem.sale_id)
+      .reduce((sum, r) => sum + r.returned_quantity, 0);
+    const maxReturnableQty = selectedSaleItem.quantity - alreadyReturnedQty;
+
+    if (isNaN(returnQty) || returnQty <= 0) {
+      toast.error('Return quantity must be greater than 0');
+      return;
+    }
+
+    if (returnQty > maxReturnableQty) {
+      toast.error(`Cannot return more than purchased quantity remaining (${maxReturnableQty})`);
+      return;
+    }
+
+    if (isNaN(refundAmt) || refundAmt < 0) {
+      toast.error('Refund amount must be a positive number or 0');
+      return;
+    }
+
+    try {
+      setSubmittingReturn(true);
+      const res = await executeReturn(selectedSaleItem.id, returnQty, refundAmt, restockStatus);
+      
+      if (res && res.local) {
+        toast.warning('Network issue — return recorded locally. Will sync later.');
+      } else {
+        toast.success('Return registered successfully!');
+      }
+
+      setReturnModalOpen(false);
+      setSelectedSaleItem(null);
+      
+      // Reload dashboard data
+      loadDashboardData(false, true);
+    } catch (err) {
+      toast.error(err.message || 'Failed to process return.');
+      console.error(err);
+    } finally {
+      setSubmittingReturn(false);
     }
   };
 
@@ -181,6 +253,13 @@ export default function Dashboard() {
     return matchesSearch && matchesPayment && matchesDate;
   });
 
+  // Paginated Sales for history
+  const totalHistoryPages = Math.ceil(filteredSales.length / historyItemsPerPage) || 1;
+  const paginatedSales = filteredSales.slice(
+    (historyPage - 1) * historyItemsPerPage,
+    historyPage * historyItemsPerPage
+  );
+
   // Filtered Expenses
   const filteredExpenses = expenses.filter(exp => {
     const matchesDate = isDateWithinRange(exp.created_at, dateRangeFilter);
@@ -191,27 +270,90 @@ export default function Dashboard() {
 
   // Total Revenue & Units Sold
   const totalRevenue = filteredSales.reduce((acc, sale) => acc + parseFloat(sale.total_price || 0), 0);
-  const totalPurchaseCount = filteredSales.length;
+  
+  // Total purchase count excludes sales that are fully returned
+  const totalPurchaseCount = filteredSales.filter(sale => {
+    const alreadyReturnedQty = returnsList
+      .filter(r => r.sale_item_id === sale.id || r.sale_item_id === sale.sale_id)
+      .reduce((sum, r) => sum + r.returned_quantity, 0);
+    return alreadyReturnedQty < sale.quantity;
+  }).length;
+
+  // Filtered Returns
+  const filteredReturns = returnsList.filter(ret => {
+    const originalSale = sales.find(s => s.id === ret.sale_item_id || s.sale_id === ret.sale_item_id);
+    const matchesDate = isDateWithinRange(ret.created_at, dateRangeFilter);
+    const matchesPayment = paymentFilter === 'All' ||
+      (originalSale && (originalSale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase());
+
+    // Match search query against the original sale's product name or customer phone
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q ||
+      (originalSale && (
+        (originalSale.product_name || '').toLowerCase().includes(q) ||
+        (originalSale.customer_phone || '').toLowerCase().includes(q)
+      ));
+
+    return matchesDate && matchesPayment && matchesSearch;
+  });
+
+  // Total refunds & net revenue
+  const totalRefunds = filteredReturns.reduce((acc, r) => acc + parseFloat(r.refund_amount || 0), 0);
+  const netRevenue = Math.max(0, totalRevenue - totalRefunds);
 
   // Total Profit (Gross)
   const grossProfit = filteredSales.reduce((acc, sale) => {
+    const qty = parseInt(sale.quantity || 0, 10);
+    const totalPrice = parseFloat(sale.total_price || 0);
+
+    // If snapshot buy price is available, use it directly (immune to catalog modifications)
+    if (sale.buy_price_snapshot !== null && sale.buy_price_snapshot !== undefined) {
+      const buyPrice = parseFloat(sale.buy_price_snapshot);
+      return acc + (totalPrice - (buyPrice * qty));
+    }
+
+    // Legacy fallback: look up product in current catalog
     const product = products.find(p => p.name.trim().toLowerCase() === sale.product_name.trim().toLowerCase());
     if (product) {
       const buyPrice = parseFloat(product.buy_price || 0);
-      const unitPrice = parseFloat(sale.unit_price || 0);
-      const qty = parseInt(sale.quantity || 0, 10);
-      return acc + ((unitPrice - buyPrice) * qty);
+      return acc + (totalPrice - (buyPrice * qty));
     } else {
-      const totalPrice = parseFloat(sale.total_price || 0);
+      // Last-resort fallback for deleted/missing products
       return acc + (totalPrice * 0.5);
     }
   }, 0);
 
+  // Returns profit deduction
+  const returnsDeduction = filteredReturns.reduce((acc, r) => {
+    const originalSale = sales.find(s => s.id === r.sale_item_id || s.sale_id === r.sale_item_id);
+    let buyPrice = 0;
+    if (originalSale) {
+      if (originalSale.buy_price_snapshot !== null && originalSale.buy_price_snapshot !== undefined) {
+        buyPrice = parseFloat(originalSale.buy_price_snapshot);
+      } else {
+        const product = products.find(p => p.name.trim().toLowerCase() === originalSale.product_name.trim().toLowerCase());
+        buyPrice = product ? parseFloat(product.buy_price || 0) : (parseFloat(originalSale.total_price || 0) / parseInt(originalSale.quantity || 1, 10)) * 0.5;
+      }
+    }
+
+    const refundAmt = parseFloat(r.refund_amount || 0);
+    const qty = parseInt(r.returned_quantity || 0, 10);
+
+    if (r.restock_status === 'Restocked') {
+      const cogsReversal = buyPrice * qty;
+      return acc + (refundAmt - cogsReversal);
+    } else {
+      return acc + refundAmt;
+    }
+  }, 0);
+
+  const adjustedGrossProfit = grossProfit - returnsDeduction;
+
   // Total Expenses
   const totalExpenses = filteredExpenses.reduce((acc, exp) => acc + parseFloat(exp.amount || 0), 0);
 
-  // Net Profit
-  const netProfit = grossProfit - totalExpenses;
+  // Net Profit (adjusted for returns)
+  const netProfit = adjustedGrossProfit - totalExpenses;
 
   // Stock Investment: sum of (buy_price * stock) for all products
   const stockInvestment = products.reduce((acc, p) => {
@@ -339,47 +481,54 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6">
 
         {/* KPI: Total Sales */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
-              Total Sales
+              Net Sales
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(totalRevenue)}
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-white truncate" title={formatCurrency(netRevenue)}>
+              {formatCurrency(netRevenue)}
             </h3>
-            <span className="text-[10px] text-beauty-taupe/80 block">
-              Started from 20 June 2026.
-            </span>
+            {totalRefunds > 0 ? (
+              <div className="text-[10px] text-rose-400 font-medium flex flex-col gap-0.5 mt-0.5">
+                <span className="opacity-95">Gross: {formatCurrency(totalRevenue)}</span>
+                <span>Ref: -{formatCurrency(totalRefunds)}</span>
+              </div>
+            ) : (
+              <span className="text-[10px] text-beauty-taupe/80 block">
+                Started from 20 June 2026.
+              </span>
+            )}
           </div>
-          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
+          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent shrink-0 ml-4">
             <Banknote className="w-6 h-6" />
           </div>
         </div>
 
         {/* KPI: Total Purchase */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Total Purchase
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-white">
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-white">
               {totalPurchaseCount}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
               Successful checkouts
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent">
+          <div className="w-12 h-12 rounded-xl bg-beauty-accent/15 flex items-center justify-center text-beauty-accent shrink-0 ml-4">
             <Receipt className="w-6 h-6" />
           </div>
         </div>
 
         {/* KPI: Net Profit */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
                 Net Profit
@@ -403,7 +552,7 @@ export default function Dashboard() {
             </div>
             
             {showProfit ? (
-              <h3 className={`text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} animate-fade-in`}>
+              <h3 className={`text-xl md:text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} animate-fade-in truncate`} title={formatCurrency(netProfit)}>
                 {formatCurrency(netProfit)}
               </h3>
             ) : (
@@ -416,7 +565,7 @@ export default function Dashboard() {
                 className="cursor-pointer group flex items-center gap-1.5"
                 title="Click to reveal"
               >
-                <h3 className="text-2xl font-bold tracking-tight text-white/40 group-hover:text-white/60 transition-colors">
+                <h3 className="text-xl md:text-2xl font-bold tracking-tight text-white/40 group-hover:text-white/60 transition-colors">
                   ••••••
                 </h3>
                 <span className="text-[8px] px-1.5 py-0.5 rounded-md bg-beauty-cream/40 text-beauty-taupe font-bold uppercase tracking-wider group-hover:bg-beauty-cream group-hover:text-white transition-all">
@@ -429,7 +578,7 @@ export default function Dashboard() {
               {showProfit ? "Gross profit - expenses" : "Click dots or eye to unlock"}
             </span>
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ml-4 ${
             !showProfit ? 'bg-beauty-cream/10 text-beauty-taupe/40' :
             netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
           }`}>
@@ -439,36 +588,36 @@ export default function Dashboard() {
 
         {/* KPI: Total Expenses */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Total Expenses
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-rose-300">
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-rose-300 truncate" title={formatCurrency(totalExpenses)}>
               {formatCurrency(totalExpenses)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
               Operational costs
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-300">
+          <div className="w-12 h-12 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-300 shrink-0 ml-4">
             <Coins className="w-6 h-6" />
           </div>
         </div>
 
         {/* KPI: Stock Investment */}
         <div className="p-6 rounded-2xl bg-beauty-rose border border-white/5 shadow-md flex items-center justify-between hover:shadow-lg transition-all duration-200 hover:border-beauty-accent/20">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Stock Investment
             </span>
-            <h3 className="text-2xl font-bold tracking-tight text-amber-400">
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-amber-400 truncate" title={formatCurrency(stockInvestment)}>
               {formatCurrency(stockInvestment)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
               Total capital in stock
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400 shrink-0 ml-4">
             <Wallet className="w-6 h-6" />
           </div>
         </div>
@@ -520,63 +669,214 @@ export default function Dashboard() {
                       <th className="pb-3 px-4 font-semibold text-right">Discount</th>
                       <th className="pb-3 px-4 font-semibold text-center">Payment</th>
                       <th className="pb-3 pl-4 font-semibold text-right">Total</th>
+                      <th className="pb-3 px-4 font-semibold text-center no-print">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                    {filteredSales.slice(0, 10).map((sale, idx) => (
-                      <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
-                        <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
-                          {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-[10px] text-beauty-taupe">
-                          {sale.customer_phone || '—'}
-                        </td>
-                        <td className="py-3.5 px-4 font-medium max-w-[200px] truncate">
-                          {sale.product_name}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded-full 
-                            ${sale.category === 'Skin Care' ? 'bg-[#151030] text-[#915EFF] border border-[#915EFF]/20' : ''}
-                            ${sale.category === 'Body Care' ? 'bg-[#151030] text-[#aaa6c9] border border-[#aaa6c9]/25' : ''}
-                            ${sale.category === 'Hair Care' ? 'bg-[#151030] text-emerald-400 border border-emerald-400/20' : ''}
-                          `}>
-                            {sale.category || 'Beauty Item'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-medium">
-                          {sale.quantity}
-                        </td>
-                        <td className="py-3.5 px-4 text-right text-beauty-taupe">
-                          {formatCurrency(sale.unit_price)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right text-rose-500 font-medium">
-                          {parseFloat(sale.discount) > 0 ? `-${formatCurrency(sale.discount)}` : '—'}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-beauty-cream/50 text-white rounded">
-                            {sale.payment_method || 'Cash'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 pl-4 text-right font-semibold text-white">
-                          {formatCurrency(sale.total_price)}
-                        </td>
-                      </tr>
-                    ))}
+                    {paginatedSales.map((sale, idx) => {
+                      const alreadyReturnedQty = returnsList
+                        .filter(r => r.sale_item_id === sale.id || r.sale_item_id === sale.sale_id)
+                        .reduce((sum, r) => sum + r.returned_quantity, 0);
+                      const maxReturnableQty = Math.max(0, sale.quantity - alreadyReturnedQty);
+
+                      return (
+                        <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
+                          <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
+                            {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-[10px] text-beauty-taupe">
+                            {sale.customer_phone || '—'}
+                          </td>
+                          <td className="py-3.5 px-4 font-medium max-w-[200px] truncate">
+                            {sale.product_name}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={`px-2.5 py-0.5 text-[9px] font-bold rounded-full 
+                              ${sale.category === 'Skin Care' ? 'bg-[#151030] text-[#915EFF] border border-[#915EFF]/20' : ''}
+                              ${sale.category === 'Body Care' ? 'bg-[#151030] text-[#aaa6c9] border border-[#aaa6c9]/25' : ''}
+                              ${sale.category === 'Hair Care' ? 'bg-[#151030] text-emerald-400 border border-emerald-400/20' : ''}
+                            `}>
+                              {sale.category || 'Beauty Item'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-medium">
+                            {sale.quantity}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-beauty-taupe">
+                            {formatCurrency(sale.unit_price)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-rose-500 font-medium">
+                            {parseFloat(sale.discount) > 0 ? `-${formatCurrency(sale.discount)}` : '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-beauty-cream/50 text-white rounded">
+                              {sale.payment_method || 'Cash'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 pl-4 text-right font-semibold text-white">
+                            {formatCurrency(sale.total_price)}
+                          </td>
+                          <td className="py-3.5 px-4 text-center no-print">
+                            {maxReturnableQty <= 0 ? (
+                              <span className="text-[10px] text-beauty-taupe/40 italic font-medium">Returned</span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setSelectedSaleItem(sale);
+                                  setReturnQtyInput(maxReturnableQty);
+                                  setRefundAmtInput(((parseFloat(sale.total_price) / sale.quantity) * maxReturnableQty).toFixed(2));
+                                  setRestockStatus('Restocked');
+                                  setReturnModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                title="Return Item"
+                              >
+                                Return
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
           </div>
-          {filteredSales.length > 10 && (
-            <div className="border-t border-white/5 pt-4 text-center mt-4">
-              <span className="text-[10px] text-beauty-taupe font-medium">
-                Showing latest 10 of {filteredSales.length} filtered transactions
-              </span>
+          {/* Pagination Controls */}
+          <div className="px-2 py-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+            <div className="text-xs text-beauty-taupe">
+              Page <span className="font-bold text-white">{historyPage}</span> of <span className="font-bold text-white">{totalHistoryPages}</span>
+              <span className="text-beauty-taupe/60 ml-2">({filteredSales.length} total sales)</span>
             </div>
-          )}
+
+            {totalHistoryPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                  disabled={historyPage === 1}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-beauty-cream/30 hover:bg-beauty-cream/50 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                <button
+                  onClick={() => setHistoryPage(prev => Math.min(totalHistoryPages, prev + 1))}
+                  disabled={historyPage === totalHistoryPages}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-beauty-accent hover:bg-beauty-accent/90 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                  title="Next page"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
       </div>
+
+      {/* Return Product Modal */}
+      {returnModalOpen && selectedSaleItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-beauty-clay via-beauty-rose to-beauty-clay shadow-2xl space-y-5 animate-scale-up">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-white">Process Product Return</h3>
+              <p className="text-xs text-beauty-taupe/80">
+                Register a customer return and specify refund terms.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-beauty-cream/10 border border-white/5 space-y-2 text-xs text-white/90">
+              <div className="flex justify-between"><span className="text-beauty-taupe">Product:</span> <span className="font-bold truncate max-w-[200px]">{selectedSaleItem.product_name}</span></div>
+              <div className="flex justify-between"><span className="text-beauty-taupe">Invoice No:</span> <span className="font-mono font-bold">{selectedSaleItem.sale_id}</span></div>
+              <div className="flex justify-between"><span className="text-beauty-taupe">Bought Qty:</span> <span className="font-bold">{selectedSaleItem.quantity} units</span></div>
+              <div className="flex justify-between"><span className="text-beauty-taupe">Bought Price:</span> <span className="font-bold">{formatCurrency(selectedSaleItem.unit_price)}</span></div>
+              <div className="flex justify-between border-t border-white/5 pt-2 text-beauty-accent"><span className="font-semibold text-beauty-taupe">Net Total Paid:</span> <span className="font-bold">{formatCurrency(selectedSaleItem.total_price)}</span></div>
+            </div>
+
+            <form onSubmit={handleReturnSubmit} className="space-y-4">
+              {/* Return Quantity */}
+              <div className="space-y-1.5">
+                <label className="beauty-label">Return Quantity</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  max={selectedSaleItem.quantity - returnsList
+                    .filter(r => r.sale_item_id === selectedSaleItem.id || r.sale_item_id === selectedSaleItem.sale_id)
+                    .reduce((sum, r) => sum + r.returned_quantity, 0)}
+                  value={returnQtyInput}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || '';
+                    setReturnQtyInput(val);
+                    if (val !== '') {
+                      // Proportional refund auto-calculate
+                      const unitPrice = parseFloat(selectedSaleItem.total_price) / selectedSaleItem.quantity;
+                      setRefundAmtInput((unitPrice * val).toFixed(2));
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs"
+                />
+              </div>
+
+              {/* Refund Amount */}
+              <div className="space-y-1.5">
+                <label className="beauty-label">Refund Amount (BDT ৳)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  min="0"
+                  value={refundAmtInput}
+                  onChange={(e) => setRefundAmtInput(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs"
+                />
+              </div>
+
+              {/* Inventory Status */}
+              <div className="space-y-1.5">
+                <label className="beauty-label">Inventory Status</label>
+                <select
+                  value={restockStatus}
+                  onChange={(e) => setRestockStatus(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none focus:ring-2 focus:ring-beauty-accent/30 focus:border-beauty-accent transition-all text-xs cursor-pointer"
+                >
+                  <option value="Restocked" className="bg-[#151030] text-white">Restocked (Add back to store stock)</option>
+                  <option value="Damaged" className="bg-[#151030] text-white">Damaged (Write off inventory cost)</option>
+                </select>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReturnModalOpen(false);
+                    setSelectedSaleItem(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-white/10 bg-beauty-cream/30 hover:bg-beauty-cream/50 text-white font-semibold text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReturn}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-purple-600 hover:from-purple-500 hover:to-rose-600 text-white font-bold text-xs tracking-wider transition-all duration-300 shadow-md cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-40"
+                >
+                  {submittingReturn ? (
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  ) : (
+                    'Confirm Return'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Password Prompt Modal for revealing Net Profit */}
       {passwordPromptOpen && (
