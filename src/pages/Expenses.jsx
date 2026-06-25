@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Coins, Trash2, Plus, Info, Receipt, ArrowLeft, Edit } from 'lucide-react';
+import { Coins, Trash2, Plus, Info, Receipt, ArrowLeft, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { getExpenses, addExpense, deleteExpense, updateExpense } from '../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,15 @@ export default function Expenses() {
 
   // Editing State
   const [editingExpenseId, setEditingExpenseId] = useState(null);
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  // Reset pagination on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, methodFilter, dateRangeFilter]);
 
   // Date range checking helper
   const isDateWithinRange = (dateString, range) => {
@@ -184,6 +193,13 @@ export default function Expenses() {
     
     return matchesSearch && matchesMethod && matchesDate;
   });
+
+  // Paginated Expenses
+  const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage) || 1;
+  const paginatedExpenses = filteredExpenses.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Total Expenses
   const totalExpensesAmount = filteredExpenses.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
@@ -404,7 +420,8 @@ export default function Expenses() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-white/5 bg-beauty-rose shadow-md">
+              <>
+                <div className="overflow-x-auto rounded-xl border border-white/5 bg-beauty-rose shadow-md">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/5 text-[10px] font-bold uppercase tracking-wider text-beauty-taupe bg-beauty-clay/50">
@@ -416,7 +433,7 @@ export default function Expenses() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/90 bg-beauty-rose/20">
-                    {filteredExpenses.map((expense) => (
+                    {paginatedExpenses.map((expense) => (
                       <tr key={expense.id} className="hover:bg-beauty-blush/30 transition-colors">
                         <td className="py-3 px-5 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
                           {formatDate(expense.created_at)}
@@ -460,6 +477,39 @@ export default function Expenses() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-white/5 mt-4">
+                  <div className="text-xs text-beauty-taupe">
+                    Page <span className="font-bold text-white">{currentPage}</span> of <span className="font-bold text-white">{totalPages}</span>
+                    <span className="text-beauty-taupe/60 ml-2">({filteredExpenses.length} total expenses)</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-beauty-cream/30 hover:bg-beauty-cream/50 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                      title="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span className="hidden sm:inline">Previous</span>
+                    </button>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-beauty-accent hover:bg-beauty-accent/90 text-white text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer"
+                      title="Next page"
+                    >
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </div>
         </div>
