@@ -244,7 +244,8 @@ export default function Dashboard() {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q ||
       (sale.product_name || '').toLowerCase().includes(q) ||
-      (sale.customer_phone || '').toLowerCase().includes(q);
+      (sale.customer_phone || '').toLowerCase().includes(q) ||
+      (sale.category || '').toLowerCase().includes(q);
 
     const matchesPayment = paymentFilter === 'All' ||
       (sale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase();
@@ -290,12 +291,13 @@ export default function Dashboard() {
     const matchesPayment = paymentFilter === 'All' ||
       (originalSale && (originalSale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase());
 
-    // Match search query against the original sale's product name or customer phone
+    // Match search query against the original sale's product name, customer phone, or category
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q ||
       (originalSale && (
         (originalSale.product_name || '').toLowerCase().includes(q) ||
-        (originalSale.customer_phone || '').toLowerCase().includes(q)
+        (originalSale.customer_phone || '').toLowerCase().includes(q) ||
+        (originalSale.category || '').toLowerCase().includes(q)
       ));
 
     const matchesCategory = categoryFilter === 'All' ||
