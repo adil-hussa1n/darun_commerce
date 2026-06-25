@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [dateRangeFilter, setDateRangeFilter] = useState('All Time');
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Purchasing History Pagination States
   const [historyPage, setHistoryPage] = useState(1);
@@ -70,7 +71,7 @@ export default function Dashboard() {
   // Reset pagination on filter changes
   useEffect(() => {
     setHistoryPage(1);
-  }, [searchQuery, paymentFilter, dateRangeFilter]);
+  }, [searchQuery, paymentFilter, dateRangeFilter, categoryFilter]);
 
   // Date range checking helper
   const isDateWithinRange = (dateString, range) => {
@@ -250,7 +251,10 @@ export default function Dashboard() {
 
     const matchesDate = isDateWithinRange(sale.date, dateRangeFilter);
 
-    return matchesSearch && matchesPayment && matchesDate;
+    const matchesCategory = categoryFilter === 'All' ||
+      (sale.category || '').toLowerCase() === categoryFilter.toLowerCase();
+
+    return matchesSearch && matchesPayment && matchesDate && matchesCategory;
   });
 
   // Paginated Sales for history
@@ -294,7 +298,10 @@ export default function Dashboard() {
         (originalSale.customer_phone || '').toLowerCase().includes(q)
       ));
 
-    return matchesDate && matchesPayment && matchesSearch;
+    const matchesCategory = categoryFilter === 'All' ||
+      (originalSale && (originalSale.category || '').toLowerCase() === categoryFilter.toLowerCase());
+
+    return matchesDate && matchesPayment && matchesSearch && matchesCategory;
   });
 
   // Total refunds & net revenue
@@ -437,48 +444,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Filtering Panel */}
-      <div className="glass-panel p-4 rounded-2xl border border-white/5 bg-beauty-rose/40 shadow-md flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
-        <div className="text-xs font-bold text-white uppercase tracking-wider">
-          Filter Overview
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1 max-w-2xl justify-end">
-          {/* Search bar */}
-          <input
-            type="text"
-            placeholder="Search product or customer phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-1 focus:ring-beauty-accent text-xs placeholder:text-beauty-taupe/40 w-full sm:w-60"
-          />
-
-          {/* Payment Method filter */}
-          <select
-            value={paymentFilter}
-            onChange={(e) => setPaymentFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs"
-          >
-            <option value="All">All Payments</option>
-            <option value="Cash">Cash</option>
-            <option value="bKash">bKash</option>
-            <option value="Card">Card</option>
-            <option value="Bank Transfer">Bank Transfer</option>
-          </select>
-
-          {/* Date Range filter */}
-          <select
-            value={dateRangeFilter}
-            onChange={(e) => setDateRangeFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs"
-          >
-            <option value="All Time">All Time</option>
-            <option value="Today">Today</option>
-            <option value="Yesterday">Yesterday</option>
-            <option value="Last 7 Days">Last 7 Days</option>
-            <option value="Last 30 Days">Last 30 Days</option>
-          </select>
-        </div>
-      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6">
@@ -630,7 +595,7 @@ export default function Dashboard() {
         {/* Recent Purchasing History */}
         <div className="bg-beauty-rose rounded-2xl border border-white/5 shadow-md p-6 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/5 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-white font-sans">
                   Recent Purchasing History
@@ -638,11 +603,73 @@ export default function Dashboard() {
               </div>
               <Link
                 to="/sell-products"
-                className="text-xs font-semibold text-beauty-accent hover:text-white flex items-center gap-1 group transition-colors"
+                className="text-xs font-semibold text-beauty-accent hover:text-white flex items-center gap-1 group transition-colors self-start md:self-auto"
               >
                 Create Sale
                 <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" />
               </Link>
+            </div>
+
+            {/* Filter controls inside Purchasing History */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Search Bar */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-beauty-taupe uppercase tracking-wider">Search</label>
+                <input
+                  type="text"
+                  placeholder="Product name or customer phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-1 focus:ring-beauty-accent text-xs placeholder:text-beauty-taupe/40 w-full animate-transition"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-beauty-taupe uppercase tracking-wider">Category</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs cursor-pointer h-[30px]"
+                >
+                  <option value="All">All Categories</option>
+                  <option value="Skin Care">Skin Care</option>
+                  <option value="Body Care">Body Care</option>
+                  <option value="Hair Care">Hair Care</option>
+                </select>
+              </div>
+
+              {/* Payment Method Filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-beauty-taupe uppercase tracking-wider">Payment Method</label>
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs cursor-pointer h-[30px]"
+                >
+                  <option value="All">All Payments</option>
+                  <option value="Cash">Cash</option>
+                  <option value="bKash">bKash</option>
+                  <option value="Card">Card</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
+
+              {/* Date Range Filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-beauty-taupe uppercase tracking-wider">Date Range</label>
+                <select
+                  value={dateRangeFilter}
+                  onChange={(e) => setDateRangeFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs cursor-pointer h-[30px]"
+                >
+                  <option value="All Time">All Time</option>
+                  <option value="Today">Today</option>
+                  <option value="Yesterday">Yesterday</option>
+                  <option value="Last 7 Days">Last 7 Days</option>
+                  <option value="Last 30 Days">Last 30 Days</option>
+                </select>
+              </div>
             </div>
 
             {filteredSales.length === 0 ? (
