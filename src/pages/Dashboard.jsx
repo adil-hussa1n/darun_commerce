@@ -42,7 +42,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [dateRangeFilter, setDateRangeFilter] = useState('All Time');
-  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   // Purchasing History Pagination States
   const [historyPage, setHistoryPage] = useState(1);
@@ -244,16 +244,16 @@ export default function Dashboard() {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q ||
       (sale.product_name || '').toLowerCase().includes(q) ||
-      (sale.customer_phone || '').toLowerCase().includes(q) ||
-      (sale.category || '').toLowerCase().includes(q);
+      (sale.customer_phone || '').toLowerCase().includes(q);
 
     const matchesPayment = paymentFilter === 'All' ||
       (sale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase();
 
     const matchesDate = isDateWithinRange(sale.date, dateRangeFilter);
 
-    const matchesCategory = categoryFilter === 'All' ||
-      (sale.category || '').toLowerCase() === categoryFilter.toLowerCase();
+    const catQ = categoryFilter.toLowerCase().trim();
+    const matchesCategory = !catQ ||
+      (sale.category || '').toLowerCase().includes(catQ);
 
     return matchesSearch && matchesPayment && matchesDate && matchesCategory;
   });
@@ -291,17 +291,17 @@ export default function Dashboard() {
     const matchesPayment = paymentFilter === 'All' ||
       (originalSale && (originalSale.payment_method || '').toLowerCase() === paymentFilter.toLowerCase());
 
-    // Match search query against the original sale's product name, customer phone, or category
+    // Match search query against the original sale's product name or customer phone
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q ||
       (originalSale && (
         (originalSale.product_name || '').toLowerCase().includes(q) ||
-        (originalSale.customer_phone || '').toLowerCase().includes(q) ||
-        (originalSale.category || '').toLowerCase().includes(q)
+        (originalSale.customer_phone || '').toLowerCase().includes(q)
       ));
 
-    const matchesCategory = categoryFilter === 'All' ||
-      (originalSale && (originalSale.category || '').toLowerCase() === categoryFilter.toLowerCase());
+    const catQ = categoryFilter.toLowerCase().trim();
+    const matchesCategory = !catQ ||
+      (originalSale && (originalSale.category || '').toLowerCase().includes(catQ));
 
     return matchesDate && matchesPayment && matchesSearch && matchesCategory;
   });
@@ -629,16 +629,13 @@ export default function Dashboard() {
               {/* Category Filter */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-bold text-beauty-taupe uppercase tracking-wider">Category</label>
-                <select
+                <input
+                  type="text"
+                  placeholder="Search category (e.g. Skin Care)..."
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-clay text-white focus:outline-none text-xs cursor-pointer h-[30px]"
-                >
-                  <option value="All">All Categories</option>
-                  <option value="Skin Care">Skin Care</option>
-                  <option value="Body Care">Body Care</option>
-                  <option value="Hair Care">Hair Care</option>
-                </select>
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-beauty-cream/50 focus:bg-beauty-cream text-white focus:outline-none focus:ring-1 focus:ring-beauty-accent text-xs placeholder:text-beauty-taupe/40 w-full animate-transition"
+                />
               </div>
 
               {/* Payment Method Filter */}
