@@ -401,8 +401,8 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 id="invoice-receipt" 
                 style={{
                   backgroundColor: '#ffffff',
-                  color: '#2C2523',
-                  border: '1px solid rgba(234, 213, 201, 0.4)',
+                  color: '#1C1917',
+                  border: '1px solid #E5E5E5',
                   borderRadius: '16px',
                   fontFamily: 'monospace',
                   fontSize: '12px',
@@ -416,20 +416,20 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 }}
               >
                 {/* Header branding */}
-                <div style={{ textAlign: 'center', borderBottom: '1px dashed #EAD5C9', paddingBottom: '16px', marginBottom: '16px' }}>
-                  <h3 style={{ fontFamily: 'sans-serif', fontWeight: 'bold', fontSize: '20px', letterSpacing: '0.05em', color: '#2C2523', textTransform: 'uppercase', margin: '0 0 6px 0', lineHeight: '1' }}>
+                <div style={{ textAlign: 'center', borderBottom: '1px dashed #D6C2B4', paddingBottom: '16px', marginBottom: '16px' }}>
+                  <h3 style={{ fontFamily: 'sans-serif', fontWeight: 'bold', fontSize: '20px', letterSpacing: '0.05em', color: '#1C1917', textTransform: 'uppercase', margin: '0 0 6px 0', lineHeight: '1' }}>
                     UK STORE
                   </h3>
-                  <p style={{ fontSize: '10px', color: '#8D7B70', fontFamily: 'sans-serif', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
+                  <p style={{ fontSize: '11px', color: '#57534E', fontFamily: 'sans-serif', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
                     Premium Skin, Body & Hair Care
                   </p>
-                  <p style={{ fontSize: '9px', color: '#8D7B70', opacity: 0.8, fontFamily: 'sans-serif', margin: '0' }}>
+                  <p style={{ fontSize: '10px', color: '#78716C', fontFamily: 'sans-serif', margin: '0' }}>
                     Musa Market, Beanibazar, Sylhet | Support: info@ukstore.com
                   </p>
                 </div>
 
                 {/* Receipt Details */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px', borderBottom: '1px dashed #EAD5C9', paddingBottom: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Receipt No:</span>
                     <span style={{ fontWeight: 'bold' }}>{invoice.invoice_no}</span>
@@ -442,15 +442,15 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                     <span>Payment Method:</span>
                     <span style={{ fontWeight: 'bold' }}>{invoice.payment_method || 'Cash'}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#8D7B70' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#57534E' }}>
                     <span>Currency:</span>
                     <span>BDT (৳)</span>
                   </div>
                 </div>
 
                 {/* Table Items */}
-                <div style={{ borderBottom: '1px dashed #EAD5C9', paddingBottom: '12px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '10px', color: '#8D7B70', marginBottom: '8px' }}>
+                <div style={{ borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px', color: '#57534E', marginBottom: '8px' }}>
                     <span>Item Description</span>
                     <span style={{ textAlign: 'right' }}>Total</span>
                   </div>
@@ -460,16 +460,16 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                         <div style={{ maxWidth: '200px' }}>
                           <span style={{ display: 'block', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
                           {(item.brand || item.ml_mg) && (
-                            <span style={{ display: 'block', fontSize: '8px', color: '#8D7B70', margin: '1px 0' }}>
+                            <span style={{ display: 'block', fontSize: '10px', color: '#57534E', margin: '1px 0' }}>
                               {[item.brand, item.ml_mg].filter(Boolean).join(' • ')}
                             </span>
                           )}
                           {(item.serial_no || item.model_barcode) && (
-                            <span style={{ display: 'block', fontSize: '7.5px', color: '#8D7B70', opacity: 0.8, fontFamily: 'monospace', margin: '1px 0' }}>
+                            <span style={{ display: 'block', fontSize: '9px', color: '#78716C', fontFamily: 'monospace', margin: '1px 0' }}>
                               {[item.serial_no ? `SN: ${item.serial_no}` : null, item.model_barcode ? `BC: ${item.model_barcode}` : null].filter(Boolean).join(' | ')}
                             </span>
                           )}
-                          <span style={{ fontSize: '9px', color: '#8D7B70' }}>
+                          <span style={{ fontSize: '10px', color: '#57534E' }}>
                             {formatCurrency(item.sell_price)} x {item.quantity}
                           </span>
                         </div>
@@ -482,13 +482,13 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </div>
 
                 {/* Summary total */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #EAD5C9', paddingBottom: '8px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '8px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Subtotal:</span>
                     <span>{formatCurrency(invoice.subtotal)}</span>
                   </div>
                   {invoice.discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
                       <span>Discount:</span>
                       <span>-{formatCurrency(invoice.discount)}</span>
                     </div>
@@ -497,12 +497,12 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 'bold', paddingTop: '4px' }}>
                   <span style={{ textTransform: 'uppercase' }}>Grand Total:</span>
-                  <span style={{ color: '#915EFF', fontSize: '16px' }}>{formatCurrency(invoice.total)}</span>
+                  <span style={{ color: '#7C3AED', fontSize: '16px' }}>{formatCurrency(invoice.total)}</span>
                 </div>
 
                 {/* Footer notes */}
-                <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #EAD5C9', fontSize: '8px', color: '#8D7B70', marginTop: '16px', lineHeight: '1.4' }}>
-                  <p style={{ fontWeight: 'bold', color: '#2C2523', fontSize: '10px', margin: '0 0 4px 0' }}>Thank You for Shopping!</p>
+                <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #D6C2B4', fontSize: '10px', color: '#57534E', marginTop: '16px', lineHeight: '1.4' }}>
+                  <p style={{ fontWeight: 'bold', color: '#1C1917', fontSize: '11px', margin: '0 0 4px 0' }}>Thank You for Shopping!</p>
                   <p style={{ margin: '0 0 2px 0' }}>Exchange within 7 days with original receipt.</p>
                   <p style={{ margin: '0' }}>System by UK Store Business Manager</p>
                 </div>
@@ -541,6 +541,9 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
       {/* Embedded print friendly stylesheet */}
       <style>{`
         @media print {
+          @page {
+            margin: 0 !important;
+          }
           aside, header, .no-print, nav, button {
             display: none !important;
           }
@@ -565,11 +568,37 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
           .print-modal-container {
             border: none !important;
             box-shadow: none !important;
-            margin: 0 auto !important;
+            margin: 0 !important;
             padding: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
             display: block !important;
+            background: #ffffff !important;
+          }
+          #invoice-receipt {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding: 8px 4px !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-sizing: border-box !important;
+          }
+          #invoice-receipt * {
+            color: #000000 !important;
+            opacity: 1 !important;
+            background: transparent !important;
+            text-shadow: none !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          #invoice-receipt div,
+          #invoice-receipt p,
+          #invoice-receipt span {
+            border-color: #000000 !important;
           }
         }
       `}</style>
