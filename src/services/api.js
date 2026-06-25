@@ -573,6 +573,7 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
           model_barcode: product.model_barcode || '',
           ml_mg: product.ml_mg || '',
           unitPrice: parseFloat(product.sell_price || 0),
+          buyPrice: parseFloat(product.buy_price || 0),
           qtySold: item.quantity
         });
       }
@@ -598,7 +599,11 @@ export const sellMultipleProducts = async (cartItems, customerPhone, discount = 
           brand: update.brand || '',
           serial_no: update.serial_no || '',
           model_barcode: update.model_barcode || '',
-          ml_mg: update.ml_mg || ''
+          ml_mg: update.ml_mg || '',
+          product_name_snapshot: update.name,
+          category_snapshot: update.category,
+          sell_price_snapshot: update.unitPrice,
+          buy_price_snapshot: update.buyPrice
         };
       });
 
@@ -754,7 +759,7 @@ export const getSalesHistory = async () => {
         }
       });
 
-      return (salesRes.data || []).map(s => {
+      const dbSales = (salesRes.data || []).map(s => {
         const productIdStr = (s.product_id || '').toString().trim();
         const product = productMap[productIdStr]
           || productMap[productIdStr.replace(/\D/g, '')];
@@ -787,6 +792,42 @@ export const getSalesHistory = async () => {
           date: s.created_at || '',
         };
       });
+
+      // Merge local unsynced checkouts
+      const unsyncedCheckouts = getLocalData('unsynced_checkouts', []);
+      const unsyncedSales = [];
+
+      unsyncedCheckouts.forEach(checkout => {
+        const { cartItems, customerPhone, discount, paymentMethod, date, batchTimestamp } = checkout;
+        const totalCartVal = cartItems.reduce((sum, item) => sum + (parseFloat(item.sell_price || 0) * item.quantity), 0);
+
+        cartItems.forEach((item, index) => {
+          const itemSubtotal = parseFloat(item.sell_price || 0) * item.quantity;
+          const distributedDiscount = totalCartVal > 0 ? (itemSubtotal / totalCartVal) * discount : 0;
+          const finalItemTotalPrice = Math.max(0, itemSubtotal - distributedDiscount);
+
+          unsyncedSales.push({
+            id: `local_unsynced_${batchTimestamp}_${index}`,
+            sale_id: `sale_${batchTimestamp}_${index}`,
+            product_name: item.name,
+            category: item.category || '',
+            quantity: item.quantity,
+            unit_price: parseFloat(item.sell_price || 0),
+            buy_price_snapshot: parseFloat(item.buy_price || 0),
+            sell_price_snapshot: parseFloat(item.sell_price || 0),
+            total_price: finalItemTotalPrice,
+            discount: distributedDiscount,
+            payment_method: paymentMethod || 'Cash',
+            customer_phone: customerPhone || '',
+            date: date || new Date(batchTimestamp).toISOString(),
+            pendingSync: true
+          });
+        });
+      });
+
+      const merged = [...unsyncedSales, ...dbSales];
+      merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+      return merged;
     } catch (error) {
       console.warn('Error fetching sales history from Supabase, falling back to local storage:', error.message);
       return getLocalSalesFallback();
@@ -1051,6 +1092,7 @@ const executeSupabaseCheckout = async (cartItems, customerPhone, discount, payme
       model_barcode: product.model_barcode || '',
       ml_mg: product.ml_mg || '',
       unitPrice: parseFloat(product.sell_price || 0),
+      buyPrice: parseFloat(product.buy_price || 0),
       qtySold: item.quantity
     });
   }
@@ -1074,6 +1116,10 @@ const executeSupabaseCheckout = async (cartItems, customerPhone, discount, payme
       serial_no: update.serial_no || '',
       model_barcode: update.model_barcode || '',
       ml_mg: update.ml_mg || '',
+      product_name_snapshot: update.name,
+      category_snapshot: update.category,
+      sell_price_snapshot: update.unitPrice,
+      buy_price_snapshot: update.buyPrice,
       created_at: dateStr
     };
   });

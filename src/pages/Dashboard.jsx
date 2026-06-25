@@ -708,7 +708,14 @@ export default function Dashboard() {
                       return (
                         <tr key={sale.sale_id || idx} className="hover:bg-beauty-blush/30 transition-colors">
                           <td className="py-3.5 pr-4 font-mono text-[10px] text-beauty-taupe whitespace-nowrap">
-                            {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            <div className="flex items-center gap-1.5">
+                              {sale.date ? new Date(sale.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                              {sale.pendingSync && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[8px] uppercase tracking-wider animate-pulse shrink-0" title="Pending Sync">
+                                  Offline
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-[10px] text-beauty-taupe">
                             {sale.customer_phone || '—'}
