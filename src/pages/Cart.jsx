@@ -429,76 +429,87 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </div>
 
                 {/* Receipt Details */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Receipt No:</span>
-                    <span style={{ fontWeight: 'bold' }}>{invoice.invoice_no}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Date:</span>
-                    <span>{invoice.date}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Payment Method:</span>
-                    <span style={{ fontWeight: 'bold' }}>{invoice.payment_method || 'Cash'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#57534E' }}>
-                    <span>Currency:</span>
-                    <span>BDT (৳)</span>
-                  </div>
-                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Receipt No:</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.invoice_no}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Date:</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', color: '#1C1917' }}>{invoice.date}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Payment Method:</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.payment_method || 'Cash'}</td>
+                    </tr>
+                    <tr style={{ color: '#57534E' }}>
+                      <td style={{ textAlign: 'left', padding: '3px 0' }}>Currency:</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0' }}>BDT (৳)</td>
+                    </tr>
+                  </tbody>
+                </table>
 
                 {/* Table Items */}
-                <div style={{ borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px', color: '#57534E', marginBottom: '8px' }}>
-                    <span>Item Description</span>
-                    <span style={{ textAlign: 'right' }}>Total</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px dashed #D6C2B4' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 'bold', color: '#57534E' }}>Item Description</th>
+                      <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold', color: '#57534E' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {invoice.items.map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                        <div style={{ maxWidth: '200px' }}>
-                          <span style={{ display: 'block', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                      <tr key={idx} style={{ verticalAlign: 'top' }}>
+                        <td style={{ textAlign: 'left', padding: '6px 0', paddingRight: '12px' }}>
+                          <span style={{ display: 'block', fontWeight: '500', color: '#1C1917' }}>{item.name}</span>
                           {(item.brand || item.ml_mg) && (
-                            <span style={{ display: 'block', fontSize: '10px', color: '#57534E', margin: '1px 0' }}>
+                            <span style={{ display: 'block', fontSize: '10px', color: '#57534E', margin: '2px 0' }}>
                               {[item.brand, item.ml_mg].filter(Boolean).join(' • ')}
                             </span>
                           )}
                           {(item.serial_no || item.model_barcode) && (
-                            <span style={{ display: 'block', fontSize: '9px', color: '#78716C', fontFamily: 'monospace', margin: '1px 0' }}>
+                            <span style={{ display: 'block', fontSize: '9px', color: '#78716C', fontFamily: 'monospace', margin: '2px 0' }}>
                               {[item.serial_no ? `SN: ${item.serial_no}` : null, item.model_barcode ? `BC: ${item.model_barcode}` : null].filter(Boolean).join(' | ')}
                             </span>
                           )}
                           <span style={{ fontSize: '10px', color: '#57534E' }}>
                             {formatCurrency(item.sell_price)} x {item.quantity}
                           </span>
-                        </div>
-                        <span style={{ fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '6px 0', fontWeight: 'bold', color: '#1C1917', whiteSpace: 'nowrap' }}>
                           {formatCurrency(item.sell_price * item.quantity)}
-                        </span>
-                      </div>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
+                  </tbody>
+                </table>
 
-                {/* Summary total */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '8px', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(invoice.subtotal)}</span>
-                  </div>
-                  {invoice.discount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}>
-                      <span>Discount:</span>
-                      <span>-{formatCurrency(invoice.discount)}</span>
-                    </div>
-                  )}
-                </div>
+                {/* Summary totals */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '8px', marginBottom: '8px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917' }}>Subtotal:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', color: '#1C1917' }}>{formatCurrency(invoice.subtotal)}</td>
+                    </tr>
+                    {invoice.discount > 0 && (
+                      <tr>
+                        <td style={{ textAlign: 'left', padding: '4px 0', color: '#dc2626' }}>Discount:</td>
+                        <td style={{ textAlign: 'right', padding: '4px 0', color: '#dc2626', fontWeight: 'bold' }}>-{formatCurrency(invoice.discount)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', fontWeight: 'bold', paddingTop: '4px' }}>
-                  <span style={{ textTransform: 'uppercase' }}>Grand Total:</span>
-                  <span style={{ color: '#7C3AED', fontSize: '16px' }}>{formatCurrency(invoice.total)}</span>
-                </div>
+                {/* Grand Total */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontWeight: 'bold', paddingTop: '4px', marginBottom: '16px' }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ textAlign: 'left', padding: '6px 0', color: '#1C1917', textTransform: 'uppercase' }}>Grand Total:</td>
+                      <td style={{ textAlign: 'right', padding: '6px 0', color: '#7C3AED', fontSize: '16px' }}>{formatCurrency(invoice.total)}</td>
+                    </tr>
+                  </tbody>
+                </table>
 
                 {/* Footer notes */}
                 <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #D6C2B4', fontSize: '10px', color: '#57534E', marginTop: '16px', lineHeight: '1.4' }}>
@@ -579,7 +590,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
-            padding: 8px 4px !important;
+            padding: 32px 8px 12px 8px !important;
             margin: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
@@ -595,6 +606,9 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          #invoice-receipt table,
+          #invoice-receipt td,
+          #invoice-receipt th,
           #invoice-receipt div,
           #invoice-receipt p,
           #invoice-receipt span {
