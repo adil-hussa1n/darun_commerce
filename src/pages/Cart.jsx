@@ -404,10 +404,10 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                   color: '#1C1917',
                   border: '1px solid #E5E5E5',
                   borderRadius: '16px',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
+                  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Arial, sans-serif',
+                  fontSize: '13px',
                   padding: '24px',
-                  lineHeight: '1.5',
+                  lineHeight: '1.4',
                   boxShadow: 'none',
                   width: '100%',
                   maxWidth: '380px',
@@ -417,41 +417,41 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
               >
                 {/* Header branding */}
                 <div style={{ textAlign: 'center', borderBottom: '1px dashed #D6C2B4', paddingBottom: '16px', marginBottom: '16px' }}>
-                  <h3 style={{ fontFamily: 'sans-serif', fontWeight: 'bold', fontSize: '20px', letterSpacing: '0.05em', color: '#1C1917', textTransform: 'uppercase', margin: '0 0 6px 0', lineHeight: '1' }}>
+                  <h3 style={{ fontWeight: 'bold', fontSize: '20px', letterSpacing: '0.05em', color: '#1C1917', textTransform: 'uppercase', margin: '0 0 6px 0', lineHeight: '1.1' }}>
                     UK STORE
                   </h3>
-                  <p style={{ fontSize: '11px', color: '#57534E', fontFamily: 'sans-serif', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#57534E', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
                     Premium Skin, Body & Hair Care
                   </p>
-                  <p style={{ fontSize: '10px', color: '#78716C', fontFamily: 'sans-serif', margin: '0' }}>
+                  <p style={{ fontSize: '11px', color: '#78716C', margin: '0' }}>
                     Musa Market, Beanibazar, Sylhet | Support: info@ukstore.com
                   </p>
                 </div>
 
                 {/* Receipt Details */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Receipt No:</td>
-                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.invoice_no}</td>
+                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917', fontWeight: '500' }}>Receipt No:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.invoice_no}</td>
                     </tr>
                     <tr>
-                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Date:</td>
-                      <td style={{ textAlign: 'right', padding: '3px 0', color: '#1C1917' }}>{invoice.date}</td>
+                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917', fontWeight: '500' }}>Date:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', color: '#1C1917', fontWeight: '500' }}>{invoice.date}</td>
                     </tr>
                     <tr>
-                      <td style={{ textAlign: 'left', padding: '3px 0', color: '#1C1917' }}>Payment Method:</td>
-                      <td style={{ textAlign: 'right', padding: '3px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.payment_method || 'Cash'}</td>
+                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917', fontWeight: '500' }}>Payment Method:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 'bold', color: '#1C1917' }}>{invoice.payment_method || 'Cash'}</td>
                     </tr>
                     <tr style={{ color: '#57534E' }}>
-                      <td style={{ textAlign: 'left', padding: '3px 0' }}>Currency:</td>
-                      <td style={{ textAlign: 'right', padding: '3px 0' }}>BDT (৳)</td>
+                      <td style={{ textAlign: 'left', padding: '4px 0', fontWeight: '500' }}>Currency:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: '500' }}>BDT (৳)</td>
                     </tr>
                   </tbody>
                 </table>
 
                 {/* Table Items */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '12px', marginBottom: '12px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px dashed #D6C2B4' }}>
                       <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 'bold', color: '#57534E' }}>Item Description</th>
@@ -460,20 +460,20 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                   </thead>
                   <tbody>
                     {invoice.items.map((item, idx) => (
-                      <tr key={idx} style={{ verticalAlign: 'top' }}>
+                      <tr key={idx} style={{ verticalAlign: 'top', borderBottom: idx < invoice.items.length - 1 ? '1px dashed rgba(214, 194, 180, 0.3)' : 'none' }}>
                         <td style={{ textAlign: 'left', padding: '6px 0', paddingRight: '12px' }}>
-                          <span style={{ display: 'block', fontWeight: '500', color: '#1C1917' }}>{item.name}</span>
+                          <span style={{ display: 'block', fontWeight: 'bold', color: '#1C1917' }}>{item.name}</span>
                           {(item.brand || item.ml_mg) && (
-                            <span style={{ display: 'block', fontSize: '10px', color: '#57534E', margin: '2px 0' }}>
+                            <span style={{ display: 'block', fontSize: '11px', color: '#57534E', margin: '2px 0', fontWeight: '500' }}>
                               {[item.brand, item.ml_mg].filter(Boolean).join(' • ')}
                             </span>
                           )}
                           {(item.serial_no || item.model_barcode) && (
-                            <span style={{ display: 'block', fontSize: '9px', color: '#78716C', fontFamily: 'monospace', margin: '2px 0' }}>
+                            <span style={{ display: 'block', fontSize: '10px', color: '#78716C', margin: '2px 0', fontWeight: '500' }}>
                               {[item.serial_no ? `SN: ${item.serial_no}` : null, item.model_barcode ? `BC: ${item.model_barcode}` : null].filter(Boolean).join(' | ')}
                             </span>
                           )}
-                          <span style={{ fontSize: '10px', color: '#57534E' }}>
+                          <span style={{ fontSize: '11px', color: '#57534E', fontWeight: '500' }}>
                             {formatCurrency(item.sell_price)} x {item.quantity}
                           </span>
                         </td>
@@ -486,15 +486,15 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </table>
 
                 {/* Summary totals */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '8px', marginBottom: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', borderBottom: '1px dashed #D6C2B4', paddingBottom: '8px', marginBottom: '8px' }}>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917' }}>Subtotal:</td>
-                      <td style={{ textAlign: 'right', padding: '4px 0', color: '#1C1917' }}>{formatCurrency(invoice.subtotal)}</td>
+                      <td style={{ textAlign: 'left', padding: '4px 0', color: '#1C1917', fontWeight: '500' }}>Subtotal:</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', color: '#1C1917', fontWeight: 'bold' }}>{formatCurrency(invoice.subtotal)}</td>
                     </tr>
                     {invoice.discount > 0 && (
                       <tr>
-                        <td style={{ textAlign: 'left', padding: '4px 0', color: '#dc2626' }}>Discount:</td>
+                        <td style={{ textAlign: 'left', padding: '4px 0', color: '#dc2626', fontWeight: '500' }}>Discount:</td>
                         <td style={{ textAlign: 'right', padding: '4px 0', color: '#dc2626', fontWeight: 'bold' }}>-{formatCurrency(invoice.discount)}</td>
                       </tr>
                     )}
@@ -502,20 +502,20 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 </table>
 
                 {/* Grand Total */}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontWeight: 'bold', paddingTop: '4px', marginBottom: '16px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', fontWeight: 'bold', paddingTop: '4px', marginBottom: '16px' }}>
                   <tbody>
                     <tr>
                       <td style={{ textAlign: 'left', padding: '6px 0', color: '#1C1917', textTransform: 'uppercase' }}>Grand Total:</td>
-                      <td style={{ textAlign: 'right', padding: '6px 0', color: '#7C3AED', fontSize: '16px' }}>{formatCurrency(invoice.total)}</td>
+                      <td style={{ textAlign: 'right', padding: '6px 0', color: '#7C3AED', fontSize: '18px' }}>{formatCurrency(invoice.total)}</td>
                     </tr>
                   </tbody>
                 </table>
 
                 {/* Footer notes */}
-                <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #D6C2B4', fontSize: '10px', color: '#57534E', marginTop: '16px', lineHeight: '1.4' }}>
-                  <p style={{ fontWeight: 'bold', color: '#1C1917', fontSize: '11px', margin: '0 0 4px 0' }}>Thank You for Shopping!</p>
-                  <p style={{ margin: '0 0 2px 0' }}>Exchange within 7 days with original receipt.</p>
-                  <p style={{ margin: '0' }}>System by UK Store Business Manager</p>
+                <div style={{ textAlign: 'center', paddingTop: '16px', borderTop: '1px dashed #D6C2B4', fontSize: '11px', color: '#57534E', marginTop: '16px', lineHeight: '1.4' }}>
+                  <p style={{ fontWeight: 'bold', color: '#1C1917', fontSize: '12px', margin: '0 0 4px 0' }}>Thank You for Shopping!</p>
+                  <p style={{ margin: '0 0 2px 0', fontWeight: '500' }}>Exchange within 7 days with original receipt.</p>
+                  <p style={{ margin: '0', fontWeight: '500' }}>System by UK Store Business Manager</p>
                 </div>
               </div>
             </div>
@@ -605,6 +605,21 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
             text-shadow: none !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif !important;
+          }
+          #invoice-receipt td,
+          #invoice-receipt th,
+          #invoice-receipt span,
+          #invoice-receipt p,
+          #invoice-receipt h3 {
+            font-weight: 600 !important;
+          }
+          #invoice-receipt h3,
+          #invoice-receipt td[style*=\"font-weight: bold\"],
+          #invoice-receipt td[style*=\"fontWeight: 'bold'\"],
+          #invoice-receipt span[style*=\"font-weight: bold\"],
+          #invoice-receipt span[style*=\"fontWeight: 'bold'\"] {
+            font-weight: 800 !important;
           }
           #invoice-receipt table,
           #invoice-receipt td,

@@ -41,7 +41,7 @@ export default function Dashboard() {
   // Filtering States
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
-  const [dateRangeFilter, setDateRangeFilter] = useState('All Time');
+  const [dateRangeFilter, setDateRangeFilter] = useState('Today');
   const [categoryFilter, setCategoryFilter] = useState('');
 
   // Purchasing History Pagination States
@@ -456,7 +456,7 @@ export default function Dashboard() {
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Net Sales
             </span>
-            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-white truncate" title={formatCurrency(netRevenue)}>
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-white" title={formatCurrency(netRevenue)}>
               {formatCurrency(netRevenue)}
             </h3>
             {totalRefunds > 0 ? (
@@ -519,7 +519,7 @@ export default function Dashboard() {
             </div>
             
             {showProfit ? (
-              <h3 className={`text-xl md:text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} animate-fade-in truncate`} title={formatCurrency(netProfit)}>
+              <h3 className={`text-xl md:text-2xl font-bold tracking-tight ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} animate-fade-in`} title={formatCurrency(netProfit)}>
                 {formatCurrency(netProfit)}
               </h3>
             ) : (
@@ -559,7 +559,7 @@ export default function Dashboard() {
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Total Expenses
             </span>
-            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-rose-300 truncate" title={formatCurrency(totalExpenses)}>
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-rose-300" title={formatCurrency(totalExpenses)}>
               {formatCurrency(totalExpenses)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">
@@ -577,7 +577,7 @@ export default function Dashboard() {
             <span className="text-[11px] font-bold text-beauty-taupe tracking-wider uppercase block">
               Stock Investment
             </span>
-            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-amber-400 truncate" title={formatCurrency(stockInvestment)}>
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight text-amber-400" title={formatCurrency(stockInvestment)}>
               {formatCurrency(stockInvestment)}
             </h3>
             <span className="text-[10px] text-beauty-taupe/80 block">

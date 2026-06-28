@@ -1397,6 +1397,56 @@ export const syncOfflineData = async () => {
     }
     saveLocalData('unsynced_returns', remainingReturns);
 
+    // 14. Sync New Investments
+    const localInvestments = getLocalData('uk_investments', []);
+    const unsyncedInvestments = localInvestments.filter(i => i.synced === false);
+    for (const inv of unsyncedInvestments) {
+      const { synced, ...supabaseInv } = inv;
+      const { error } = await supabase
+        .from('uk_investments')
+        .insert([supabaseInv]);
+
+      if (!error) {
+        inv.synced = true;
+        syncCount++;
+      }
+    }
+    if (unsyncedInvestments.length > 0) {
+      saveLocalData('uk_investments', localInvestments);
+    }
+
+    // 15. Sync Investment Updates
+    const unsyncedInvUpdates = getLocalData('unsynced_investment_updates', []);
+    const remainingInvUpdates = [];
+    for (const update of unsyncedInvUpdates) {
+      const { error } = await supabase
+        .from('uk_investments')
+        .update(update.formattedInvestment)
+        .eq('id', update.investmentId);
+
+      if (!error) {
+        syncCount++;
+      } else {
+        remainingInvUpdates.push(update);
+      }
+    }
+    saveLocalData('unsynced_investment_updates', remainingInvUpdates);
+
+    // 16. Sync Deleted Investments
+    const deletedInvestments = getLocalData('deleted_investment_ids', []);
+    const remainingDeletedInvestments = [];
+    for (const id of deletedInvestments) {
+      if (/^\d+$/.test(id)) {
+        const { error } = await supabase
+          .from('uk_investments')
+          .delete()
+          .eq('id', parseInt(id, 10));
+        if (!error) syncCount++;
+        else remainingDeletedInvestments.push(id);
+      }
+    }
+    saveLocalData('deleted_investment_ids', remainingDeletedInvestments);
+
     return { success: true, syncedCount: syncCount };
   } catch (err) {
     console.error('Error syncing offline data:', err.message);
@@ -1418,22 +1468,27 @@ export const getUnsyncedCount = () => {
   const partyTxs = getLocalData('uk_party_transactions', []);
   const unsyncedPartyTxsCount = partyTxs.filter(t => t.synced === false).length;
 
+  const investments = getLocalData('uk_investments', []);
+  const unsyncedInvestmentsCount = investments.filter(i => i.synced === false).length;
+
   const unsyncedUpdatesCount = getLocalData('unsynced_product_updates', []).length;
   const unsyncedCheckoutsCount = getLocalData('unsynced_checkouts', []).length;
   const unsyncedExpenseUpdatesCount = getLocalData('unsynced_expense_updates', []).length;
   const unsyncedPartyUpdatesCount = getLocalData('unsynced_party_updates', []).length;
   const unsyncedPartyTxUpdatesCount = getLocalData('unsynced_party_transaction_updates', []).length;
+  const unsyncedInvestmentUpdatesCount = getLocalData('unsynced_investment_updates', []).length;
 
   const unsyncedDeletedPartiesCount = getLocalData('deleted_party_ids', []).length;
   const unsyncedDeletedTxsCount = getLocalData('deleted_party_transaction_ids', []).length;
   const unsyncedDeletedExpensesCount = getLocalData('deleted_expense_ids', []).length;
+  const unsyncedDeletedInvestmentsCount = getLocalData('deleted_investment_ids', []).length;
   const unsyncedReturnsCount = getLocalData('unsynced_returns', []).length;
 
   return unsyncedProductsCount + unsyncedExpensesCount + unsyncedPartiesCount + unsyncedPartyTxsCount +
-         unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount +
-         unsyncedPartyUpdatesCount + unsyncedPartyTxUpdatesCount +
+         unsyncedInvestmentsCount + unsyncedUpdatesCount + unsyncedCheckoutsCount + unsyncedExpenseUpdatesCount +
+         unsyncedPartyUpdatesCount + unsyncedPartyTxUpdatesCount + unsyncedInvestmentUpdatesCount +
          unsyncedDeletedPartiesCount + unsyncedDeletedTxsCount + unsyncedDeletedExpensesCount +
-         unsyncedReturnsCount;
+         unsyncedDeletedInvestmentsCount + unsyncedReturnsCount;
 };
 
 /**
@@ -2074,6 +2129,216 @@ const executeLocalReturn = (saleItemId, returnedQty, refundAmount, restockStatus
     date: dateStr
   });
   saveLocalData('unsynced_returns', unsyncedReturns);
+
+  return { success: true, local: true };
+};
+
+/**
+ * ----------------------------------------------------
+ * INVESTMENTS OPERATIONS
+ * ----------------------------------------------------
+ */
+
+// Fetch all investments
+export const getInvestments = async () => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_investments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      const dbInvestments = (data || []).map(inv => ({
+        id: inv.id.toString(),
+        name: inv.name || '',
+        amount: parseFloat(inv.amount || 0),
+        description: inv.description || '',
+        created_at: inv.created_at || ''
+      }));
+
+      const localInvestments = getLocalData('uk_investments', []);
+      const unsyncedAdditions = localInvestments.filter(e => e.synced === false);
+      const unsyncedUpdates = getLocalData('unsynced_investment_updates', []);
+
+      let merged = [...dbInvestments];
+
+      // Apply updates
+      merged = merged.map(e => {
+        const update = unsyncedUpdates.find(u => u.investmentId.toString() === e.id.toString());
+        if (update) {
+          return { ...e, ...update.formattedInvestment };
+        }
+        return e;
+      });
+
+      // Filter out deleted
+      const deletedIds = new Set(getLocalData('deleted_investment_ids', []));
+      merged = merged.filter(e => !deletedIds.has(e.id.toString()));
+
+      // Add additions
+      const dbIds = new Set(dbInvestments.map(e => e.id.toString()));
+      unsyncedAdditions.forEach(e => {
+        if (!dbIds.has(e.id.toString())) {
+          merged.unshift(e);
+        }
+      });
+
+      return merged;
+    } catch (error) {
+      console.warn('Error fetching investments from Supabase, falling back locally:', error.message);
+      return getLocalInvestmentsFallback();
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return getLocalInvestmentsFallback();
+  }
+};
+
+const getLocalInvestmentsFallback = () => {
+  return getLocalData('uk_investments', []).map(inv => ({
+    ...inv,
+    amount: parseFloat(inv.amount || 0)
+  }));
+};
+
+// Add an investment
+export const addInvestment = async (investmentData) => {
+  const formattedInvestment = {
+    name: investmentData.name,
+    amount: parseFloat(investmentData.amount || 0),
+    description: investmentData.description || '',
+    created_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('uk_investments')
+        .insert([formattedInvestment])
+        .select();
+
+      if (error) throw error;
+
+      // sync local cache
+      const localInvestments = getLocalData('uk_investments', []);
+      const newId = data && data[0] ? data[0].id.toString() : `inv_${Date.now()}`;
+      localInvestments.unshift({ ...formattedInvestment, id: newId });
+      saveLocalData('uk_investments', localInvestments);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error adding investment to Supabase, falling back locally:', error.message);
+      return executeLocalAddInvestment(formattedInvestment);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return executeLocalAddInvestment(formattedInvestment);
+  }
+};
+
+const executeLocalAddInvestment = (formattedInvestment) => {
+  const localInvestments = getLocalData('uk_investments', []);
+  const newInvestment = { ...formattedInvestment, id: `inv_${Date.now()}`, synced: false };
+  localInvestments.unshift(newInvestment);
+  saveLocalData('uk_investments', localInvestments);
+  return { success: true, local: true };
+};
+
+// Update an investment
+export const updateInvestment = async (investmentId, updatedFields) => {
+  const formattedFields = {
+    name: updatedFields.name,
+    amount: parseFloat(updatedFields.amount || 0),
+    description: updatedFields.description || ''
+  };
+
+  if (isSupabaseConfigured()) {
+    try {
+      const isNumeric = /^\d+$/.test(investmentId.toString());
+      const { error } = await supabase
+        .from('uk_investments')
+        .update(formattedFields)
+        .eq(isNumeric ? 'id' : 'id_temp', isNumeric ? parseInt(investmentId, 10) : investmentId);
+
+      if (error) throw error;
+
+      // Sync local cache
+      const localInvestments = getLocalData('uk_investments', []);
+      const index = localInvestments.findIndex(i => i.id.toString() === investmentId.toString());
+      if (index !== -1) {
+        localInvestments[index] = { ...localInvestments[index], ...formattedFields };
+        saveLocalData('uk_investments', localInvestments);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating investment in Supabase, caching locally:', error.message);
+      return queueLocalInvestmentUpdate(investmentId, formattedFields);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return queueLocalInvestmentUpdate(investmentId, formattedFields);
+  }
+};
+
+const queueLocalInvestmentUpdate = (investmentId, formattedFields) => {
+  // Sync local cache
+  const localInvestments = getLocalData('uk_investments', []);
+  const index = localInvestments.findIndex(i => i.id.toString() === investmentId.toString());
+  if (index !== -1) {
+    localInvestments[index] = { ...localInvestments[index], ...formattedFields };
+    saveLocalData('uk_investments', localInvestments);
+  }
+
+  // Queue update
+  const updates = getLocalData('unsynced_investment_updates', []);
+  const filtered = updates.filter(u => u.investmentId.toString() !== investmentId.toString());
+  filtered.push({ investmentId, formattedInvestment: formattedFields });
+  saveLocalData('unsynced_investment_updates', filtered);
+
+  return { success: true, local: true };
+};
+
+// Delete an investment
+export const deleteInvestment = async (investmentId) => {
+  if (isSupabaseConfigured()) {
+    try {
+      const isNumeric = /^\d+$/.test(investmentId.toString());
+      const { error } = await supabase
+        .from('uk_investments')
+        .delete()
+        .eq(isNumeric ? 'id' : 'id_temp', isNumeric ? parseInt(investmentId, 10) : investmentId);
+
+      if (error) throw error;
+
+      // Sync local cache
+      const localInvestments = getLocalData('uk_investments', []);
+      const filtered = localInvestments.filter(i => i.id.toString() !== investmentId.toString());
+      saveLocalData('uk_investments', filtered);
+
+      return { success: true };
+    } catch (error) {
+      console.warn('Error deleting investment from Supabase, caching locally:', error.message);
+      return queueLocalInvestmentDeletion(investmentId);
+    }
+  } else {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return queueLocalInvestmentDeletion(investmentId);
+  }
+};
+
+const queueLocalInvestmentDeletion = (investmentId) => {
+  // Sync local cache
+  const localInvestments = getLocalData('uk_investments', []);
+  const filtered = localInvestments.filter(i => i.id.toString() !== investmentId.toString());
+  saveLocalData('uk_investments', filtered);
+
+  // Queue deletion
+  const deletedIds = getLocalData('deleted_investment_ids', []);
+  deletedIds.push(investmentId.toString());
+  saveLocalData('deleted_investment_ids', deletedIds);
 
   return { success: true, local: true };
 };

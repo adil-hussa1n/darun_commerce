@@ -18,6 +18,9 @@ export default function Expenses() {
   // Editing State
   const [editingExpenseId, setEditingExpenseId] = useState(null);
 
+  // Custom Confirm Dialog State
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -165,9 +168,12 @@ export default function Expenses() {
   };
 
   // Delete expense handler
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+  const handleDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
 
+  const executeDelete = async (id) => {
+    setDeleteConfirmId(null);
     try {
       const res = await deleteExpense(id);
       if (res.success) {
@@ -515,6 +521,37 @@ export default function Expenses() {
         </div>
 
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1738] border border-white/10 max-w-sm w-full rounded-2xl p-6 shadow-2xl animate-slide-up space-y-6 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">Delete Expense Record?</h3>
+              <p className="text-xs text-beauty-taupe">
+                Are you sure you want to delete this expense record? This action is permanent and cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold tracking-wider uppercase transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => executeDelete(deleteConfirmId)}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold tracking-wider uppercase transition-all cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

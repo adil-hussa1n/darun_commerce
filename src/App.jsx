@@ -11,6 +11,7 @@ import SellProducts from './pages/SellProducts';
 import Cart from './pages/Cart';
 import Expenses from './pages/Expenses';
 import Parties from './pages/Parties';
+import Investments from './pages/Investments';
 import { toast } from 'react-toastify';
 
 export default function App() {
@@ -127,6 +128,7 @@ export default function App() {
           />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/parties" element={<Parties />} />
+          <Route path="/investments" element={<Investments />} />
         </Routes>
       </Layout>
       <ToastContainer 
