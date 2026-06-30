@@ -395,7 +395,7 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
         <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print-overlay">
           <div className="bg-beauty-rose max-w-sm w-full rounded-2xl border border-white/5 shadow-2xl overflow-hidden animate-slide-up flex flex-col justify-between my-8 print-modal-container">
             
-            <div className="p-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-6 overflow-y-auto max-h-[70vh] print-scroll-container">
               <div 
                 ref={receiptRef} 
                 id="invoice-receipt" 
@@ -416,15 +416,18 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
                 }}
               >
                 {/* Header branding */}
-                <div style={{ textAlign: 'center', borderBottom: '1px dashed #D6C2B4', paddingBottom: '16px', marginBottom: '16px' }}>
+                <div style={{ textAlign: 'center', borderBottom: '1px dashed #D6C2B4', paddingBottom: '16px', marginBottom: '16px', width: '100%' }}>
                   <h3 style={{ fontWeight: 'bold', fontSize: '20px', letterSpacing: '0.05em', color: '#1C1917', textTransform: 'uppercase', margin: '0 0 6px 0', lineHeight: '1.1' }}>
                     UK STORE
                   </h3>
-                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#57534E', letterSpacing: '0.025em', margin: '0 0 4px 0' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#57534E', letterSpacing: '0.025em', margin: '0 0 6px 0', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                     Premium Skin, Body & Hair Care
                   </p>
-                  <p style={{ fontSize: '11px', color: '#78716C', margin: '0' }}>
-                    Musa Market, Beanibazar, Sylhet | Support: info@ukstore.com
+                  <p style={{ fontSize: '11px', color: '#78716C', margin: '0 0 2px 0', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                    Musa Market, Beanibazar, Sylhet
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#78716C', margin: '0', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                    Support: info@ukstore.com
                   </p>
                 </div>
 
@@ -585,6 +588,13 @@ export default function Cart({ cart, updateCartQty, removeFromCart, clearCart })
             width: 100% !important;
             display: block !important;
             background: #ffffff !important;
+          }
+          .print-scroll-container {
+            max-height: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           #invoice-receipt {
             border: none !important;

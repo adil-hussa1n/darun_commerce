@@ -208,7 +208,22 @@ export default function AddProduct() {
       };
       await addProduct(productPayload);
       toast.success(`Product added successfully with Serial No: ${nextSerial}!`);
-      navigate('/');
+      
+      // Reload products list to show new item in the table
+      const data = await getProducts();
+      setProducts(data);
+      
+      // Reset form fields so the user can type the next product details immediately
+      setForm({
+        category: '',
+        brand: '',
+        name: '',
+        model_barcode: '',
+        ml_mg: '',
+        stock: '',
+        buy_price: '',
+        sell_price: ''
+      });
     } catch (err) {
       toast.error('Failed to save product. Check configuration.');
       console.error(err);
